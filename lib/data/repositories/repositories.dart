@@ -9,6 +9,7 @@ import 'polsek_repository.dart';
 import 'poskamling_repository.dart';
 import 'profile_repository.dart';
 import 'school_repository.dart';
+import 'sos_repository.dart';
 import 'subject_repository.dart';
 import 'tipkamtikmas_repository.dart';
 import 'user_management_repository.dart';
@@ -33,4 +34,5 @@ class Repositories {
   final TipkamtikmasRepository tipkamtikmas = TipkamtikmasRepository();
   final UserManagementRepository userManagement = UserManagementRepository();
   final AuditRepository audit = AuditRepository();
+  final SosRepository sos = SosRepository();
 }

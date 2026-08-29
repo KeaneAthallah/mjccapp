@@ -13,6 +13,7 @@ import '../master/master_home_screen.dart';
 import '../profile/profile_screen.dart';
 import '../resources/resource_screens.dart';
 import '../security/security_home_screen.dart';
+import '../sos/sos_screen.dart';
 import '../users/users_screen.dart';
 
 /// Authenticated application shell with a dashboard home and navigation.
@@ -197,6 +198,26 @@ class MainScaffold extends StatelessWidget {
                   'Dashboard',
                   () => Navigator.of(context).popUntil((r) => r.isFirst),
                 ),
+                const SizedBox(height: 8),
+                _sectionLabel('DARURAT'),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.sos, color: AppColors.red100),
+                  title: const Text(
+                    'SOS Darurat',
+                    style: TextStyle(
+                      color: AppColors.red100,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  selectedTileColor: AppColors.red600.withValues(alpha: 0.22),
+                  onTap: () => _go(context, const SosScreen()),
+                ),
+                const SizedBox(height: 4),
                 _navItem(
                   context,
                   Icons.map_outlined,
