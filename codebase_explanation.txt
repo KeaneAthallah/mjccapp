@@ -1,0 +1,218 @@
+================================================================================
+  MOROWALI JUARA COMMAND CENTER (MJCC) - PENJELASAN KODE (ANDROID / FLUTTER)
+================================================================================
+  Total: aplikasi Flutter untuk Android, UI Bahasa Indonesia. Klien untuk
+  backend Laravel di ../mjcc (API `/api/v1`). Nama paket: mjcc 1.0.0+1.
+
+--------------------------------------------------------------------------------
+1.  APA APLIKASI INI
+--------------------------------------------------------------------------------
+Versi mobile dari dashboard Command Center Kabupaten Morowali
+(http://10.0.2.2:8000 saat pengembangan dari emulator). Berisi:
+
+  - DASHBOARD   ringkasan KPI, "Perlu Perhatian", top kecamatan, rekap sektor
+  - PETA        marker interaktif (OpenStreetMap) dengan filter sektor/jenis
+  - PENDIDIKAN  daftar Sekolah (SD/SMP) + CRUD
+  - KETERTIBAN  Polsek, Tipkamtikmas, Poskamling, Pasar (hub + CRUD)
+  - KESEHATAN   Fasilitas Kesehatan (Puskesmas, Pustu, RS, Posyandu) + CRUD
+  - MASTER DATA Kecamatan (+ kelurahan) dan Subjek (mata pelajaran)
+  - ADMIN       Manajemen Pengguna & Audit Log (hanya role admin)
+  - PROFIL      edit profil & ganti kata sandi
+  - DAFTAR      registrasi publik (role viewer) + verifikasi kode email 6 digit
+
+Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
+
+--------------------------------------------------------------------------------
+2.  TEKNOLOGI & VERSI
+--------------------------------------------------------------------------------
+  - Flutter (Dart SDK ^3.13.2)
+  - dio ^5.7.0                 (HTTP client + interceptor token)
+  - provider ^6.1.2            (state management, ChangeNotifier)
+  - flutter_secure_storage     (token/user/theme disimpan aman, Android Keystore)
+  - intl ^0.20.2               (format tanggal & angka, locale id)
+  - flutter_map ^8.3.2 + latlong2  (peta OpenStreetMap)
+  - flutter_lints ^6.0.0       (analisis statis)
+  - Android: namespace/applicationId com.example.mjcc, izin INTERNET,
+    usesCleartextTraffic="true" (HTTP lokal selama pengembangan)
+
+--------------------------------------------------------------------------------
+3.  STRUKTUR DIREKTORI UTAMA
+--------------------------------------------------------------------------------
+  lib/
+    main.dart                     Titik masuk: MultiProvider + MaterialApp
+    routes/routes.dart            Tabel route (/login, /home, default root)
+    core/
+      config/app_config.dart      Base URL API + timeouts (API_BASE_URL)
+      errors/app_exception.dart   AppException + Unauthorized/Forbidden/
+                                  Validation/NetworkException
+      network/
+        api_client.dart           Dio singleton + autentikasi + normalisasi error
+        api_response.dart         Model envelope { success, message, data, ... }
+        paginated.dart            Model pagination dari blok meta Laravel
+      storage/secure_storage.dart Pembungkus flutter_secure_storage
+      theme/
+        app_colors.dart           Palet emerald/blue/status (ikon Tailwind)
+        app_theme.dart            AppTheme light/dark + AppThemeColors (semantic)
+        app_spacing.dart          Skala spacing terpusat
+      utils/
+        error_messages.dart       Pesan error yang aman ditampilkan ke user
+        formatters.dart           Tanggal & angka
+    data/
+      models/                     1 model per API resource (School, Polsek, ...)
+      repositories/               N = repository/API service
+        resource_api.dart         CRUD generik (index/show/create/update/dest)
+        repositories.dart         Service locator (Singel Repositories.instance)
+        resource khusus: auth, dashboard, map, profile, user_management, audit,
+        kecamatan (all + kelurahans), subject (all)
+    presentation/
+      providers/                  ChangeNotifier per halaman/domain
+      screens/                    Halaman (login, home, dashboard, map, master,
+                                  security, resources, users, audit, profile)
+      widgets/                    Komponen UI yang dipakai ulang
+    test/                         Widget & unit test (lihat bagian 8)
+
+--------------------------------------------------------------------------------
+4.  ARSITEKTUR & ALIRAN DATA
+--------------------------------------------------------------------------------
+Berpola lapisan sederhana (tanpa framework tambahan):
+
+  Screen (widget + Provider) -> Provider (ChangeNotifier) -> Repository
+  -> ApiClient (Dio) -> Laravel API /api/v1
+
+  - Provider didaftarkan sekali di main.dart (AuthProvider, ThemeProvider,
+    DashboardProvider, MapProvider, MasterDataProvider, UserManagementProvider,
+    AuditProvider, ProfileProvider) - cakupan root (global).
+  - Provider list CRUD (SchoolListProvider, dll.) dibuat per layar di
+    resource_screens.dart lalu di-dispose saat layar ditutup.
+  - Repository diakses melalui Repositories.instance (service locator), bukan
+    injeksi kontruktor, sehingga provider ringkas.
+
+Envelope API (konsisten dari backend):
+  { "success": bool, "message": string, "data": {...}|[...],
+    "meta": { current_page, last_page, per_page, total }, "errors": {...} }
+
+  - ApiResponse<T>::fromJson memparse data tunggal.
+  - Paginated<T>::fromJson memparse data list + meta.
+
+--------------------------------------------------------------------------------
+5.  AUTENTIKASI & SESSION
+--------------------------------------------------------------------------------
+  - POST /login  {email, password} -> data: { token, user } ; token & user
+    (JSON) disimpan ke SecureStorage. User juga di-cache di memory (AuthProvider).
+  - Request lain otomatis memakai header `Authorization: Bearer <token>`
+    lewat interceptor ApiClient._onRequest.
+  - POST /logout : panggil server (best-effort), lalu SecureStorage.clearAll().
+  - GET /me : refresh user profile.
+  - POST /register : daftar akun publik (role SELALU viewer dari backend);
+    respons data: { email_masked }. Tidak menerbitkan token.
+  - POST /email/verify {email, code} : konfirmasi kode 6 digit (berlaku
+    10 menit, sekali pakai, maks 5 percobaan).
+  - POST /email/verification/resend {email} : kirim ulang kode (cooldown
+    60 detik di server; countdown di klien hanya UX).
+  - Login email belum diverifikasi -> 403 + extra verification_required:
+    ApiClient melempar EmailNotVerifiedException, LoginScreen mengarahkan
+    ke EmailVerificationScreen tanpa token diterbitkan.
+  - Kode verifikasi tidak pernah dikembalikan oleh API.
+  - Saat respons 401, ApiClient memanggil onUnauthorized -> AuthProvider
+    menghapus user -> layar kembali ke Login (via RootScreen).
+  - RootScreen.restoreSession() membaca user tersimpan di startup tanpa panggil
+    jaringan; jika ada token, langsung ke MainScaffold.
+
+Role (UserModel / enum UserRole):
+  - viewer : hanya baca (canWrite = false); hide tombol tambah/edit/hapus.
+  - operator : bisa menulis.
+  - admin : bisa menulis + menu Pengguna & Audit Log.
+
+Error handling (AppException):
+  - ApiClient mengubah DioException -> AppException (NetworkException utk
+    timeout/koneksi; UnauthorizedException 401; ForbiddenException 403;
+    ValidationException 422 + errors; AppException utk 400/404/409/429/5xx).
+  - ErrorMessages.of() menghasilkan teks user-safe; ErrorMessages.fieldError()
+    mengambil error per-field (dipakai di form login).
+  - Form CRUD menampilkan error 422 per field (ResourceFormScreen).
+
+--------------------------------------------------------------------------------
+6.  FITUR UTAMA PER LAYAR
+--------------------------------------------------------------------------------
+  - RootScreen        Startup: logo + splash saat restore session, lalu
+                      LoginScreen atau MainScaffold.
+  - LoginScreen       Form validasi email/sandi, tombol theme di pojok,
+                      gradien emerald-biru.
+  - RegisterScreen    Form daftar (nama/email/sandi/konfirmasi) ->
+                      RegisterProvider -> POST /register; sukses membuka
+                      EmailVerificationScreen dengan email termask.
+  - EmailVerificationScreen  Input kode 6 digit -> POST /email/verify;
+                      tombol "Kirim ulang kode" + countdown 60 detik;
+                      diakses dari daftar akun atau login yang ditolak.
+  - MainScaffold      AppBar (logo, tombol theme/profil/keluar) + Drawer
+                      bernavigasi dengan section (KETERTIBAN / PENDIDIKAN /
+                      KESEHATAN / MASTER DATA / ADMINISTRASI). Body = Dashboard.
+  - DashboardScreen   Pull-to-refresh; welcome banner, dropdown filter
+                      kecamatan, grid KPI (StatCard), kartu "Perlu Perhatian"
+                      (critical/warning), top-ranking, rekap per kecamatan.
+                      Data dari GET /dashboard (overview). Skeleton saat
+                      loading (AppDashboardLoading).
+  - MapScreen         flutter_map + tile OpenStreetMap; filter sektor
+                      (pendidikan/kesehatan/ketertiban), jenis, kecamatan;
+                      marker berwarna per jenis; bottom-sheet detail marker.
+                      Pusat awal Morowali (-2.1833, 121.4833), zoom 10.
+  - SecurityHomeScreen Hub grid 4 tile: Polsek, Tipkamtikmas, Poskamling, Pasar.
+  - MasterHomeScreen  Tab Kecamatan (ExpansionTile + kelurahan per kecamatan
+                      via GET /kecamatans/{id}/kelurahans) dan Tab Subjek.
+  - Resource screens (School/HealthFacility/Polsek/Market/Poskamling/
+                      Tipkamtikmas) dibangun dari ResourceListView<T> yang
+                      generik: daftar + cari (debounce 400ms) + pagination
+                      infinite scroll + CRUD via ResourceFormScreen.
+  - UsersScreen       (admin) list pengguna, tambah/ubah role & password,
+                      hapus. Loading stus: AsyncLoadingView/Empty/Error.
+  - AuditScreen       (admin) log aktivitas (GET /audit) + detail bottom-sheet.
+  - ProfileScreen     kartu profil, ubah profil (PUT /profile), ganti sandi
+                      (PUT /profile/password).
+
+--------------------------------------------------------------------------------
+7.  TOKEN & KEAMANAN
+--------------------------------------------------------------------------------
+  - Bearer token dan data user disimpan di flutter_secure_storage
+    (AndroidOptions.encryptedSharedPreferences = true).
+  - Tema (light/dark/system) juga dipersist di storage yang sama.
+  - Tidak ada secret di source (API_BASE_URL via --dart-define, default
+    http://10.0.2.2:8000 untuk emulator).
+  - Deklarasi token hanya di memory provider, tidak di widget tree global agar
+    tidak bocor ke UI (kecuali nama/email yang memang ditampilkan).
+
+--------------------------------------------------------------------------------
+8.  TESTING
+--------------------------------------------------------------------------------
+  - test/smoke_test.dart              Widget test minimal: MJCCApp ter-build.
+  - test/dashboard_overview_test.dart Unit test parsing DashboardOverview
+                                      (angka sebagai string, field chart map,
+                                      stats kosong).
+  - test/dashboard_real_payload_test.dart  Parsing payload asli dari fixture
+                                      test/fixtures/dashboard_full.json.
+  - test/auth_flow_test.dart       Widget test alur autentikasi (login -> daftar
+                                      -> verifikasi -> kirim ulang kode) dengan
+                                      FakeAuthRepository tanpa koneksi jaringan.
+  - Jalankan: flutter test
+  - Analisis: flutter analyze
+
+--------------------------------------------------------------------------------
+9.  CARA MENJALANKAN / MENGOVERRIDE
+--------------------------------------------------------------------------------
+  - Emulator Android (host = 10.0.2.2):
+      flutter run
+  - Perangkat fisik / server lain (harus di LAN yang sama atau publik):
+      flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
+  - Build APK rilis:
+      flutter build apk --release
+  - Backend harus aktif: laravel serve / artisan di ../mjcc (port 8000).
+
+--------------------------------------------------------------------------------
+10. KONVENSI KODE
+--------------------------------------------------------------------------------
+  - Bahasa UI = Indonesia; kode (identifier) = Inggris.
+  - Model punya factory dariJson dan (untuk yang bisa ditulis) toRequest()
+    yang membuang nilai null.
+  - Pesan kesalahan ujung-ke-ujung memakai ErrorMessages / AppException
+    (tidak menampilkan text exception mentah).
+  - Tema & spacing selalu lewat AppThemeColors / AppSpacing, bukan hardcode.
+  - Kosong/tidak ada data -> AsyncEmptyView / 'Belum ada data.'

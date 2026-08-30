@@ -25,6 +25,12 @@ class ForbiddenException extends AppException {
   const ForbiddenException(super.message);
 }
 
+/// Raised when the backend reports that the account's email is not yet
+/// verified (HTTP 403 with `verification_required: true`).
+class EmailNotVerifiedException extends AppException {
+  const EmailNotVerifiedException(super.message);
+}
+
 /// Raised when the backend reports a validation failure (HTTP 422).
 class ValidationException extends AppException {
   const ValidationException(super.message, {Map<String, dynamic>? errors})

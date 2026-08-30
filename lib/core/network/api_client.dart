@@ -138,6 +138,9 @@ import '../storage/secure_storage.dart';
       case 401:
         return UnauthorizedException(message ?? 'Anda belum terautentikasi.');
       case 403:
+        if (data is Map<String, dynamic> && data['verification_required'] == true) {
+          return EmailNotVerifiedException(message ?? 'Email Anda belum diverifikasi.');
+        }
         return ForbiddenException(message ?? 'Anda tidak memiliki akses.');
       case 404:
         return AppException(

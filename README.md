@@ -29,6 +29,7 @@ secara langsung (live).
 - **Data Ketertiban** — polsek, tipkamtikmas, poskamling, dan pasar.
 - **Data Master** — kecamatan, kelurahan, dan subjek/mata pelajaran.
 - **Manajemen Pengguna** — kelola akun (khusus admin).
+- **Daftar Akun & Verifikasi Email** — registrasi mandiri via API (role selalu `viewer` dari backend) dikonfirmasi kode 6 digit dari email, ditampilkan dengan email termask, plus tombol kirim ulang kode dengan jeda 60 detik.
 - **Audit Log** — jejak aktivitas sistem (khusus admin).
 - **Profil** — ubah data diri, foto, dan kata sandi.
 - **Tema Gelap/Terang** — pengaturan tema dalam aplikasi.
@@ -102,8 +103,9 @@ flutter analyze
 flutter test
 ```
 
-Test mencakup parsing model (mis. `DashboardOverview`, `SosAlert`) dan smoke test
-aplikasi.
+Test mencakup parsing model (mis. `DashboardOverview`, `SosAlert`), smoke test
+aplikasi, serta alur autentikasi (login, registrasi akun, verifikasi kode email,
+kirim ulang kode) yang dijalankan dengan repositori tiruan tanpa koneksi jaringan.
 
 ## Informasi Tambahan
 

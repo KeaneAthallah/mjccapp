@@ -7,7 +7,8 @@ import '../../core/network/api_client.dart';
 import '../../core/storage/secure_storage.dart';
 import '../models/user_model.dart';
 
-/// Authentication repository: login, logout and current user.
+/// Authentication repository: login, logout, current user, public
+/// self-registration and email verification.
 class AuthRepository {
   Future<UserModel> login(String email, String password) async {
     final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
@@ -28,6 +29,41 @@ class AuthRepository {
     await SecureStorage.saveUser(jsonEncode(user.toJson()));
 
     return user;
+  }
+
+  /// Creates a new `viewer` account. The backend decides the role and sends a
+  /// verification email; no token is issued here.
+  Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/register',
+      data: {
+        'name': name,
+        'email': email,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
+    );
+  }
+
+  /// Submits the six-digit code for the given email.
+  Future<void> verifyEmail({required String email, required String code}) async {
+    await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/email/verify',
+      data: {'email': email, 'code': code},
+    );
+  }
+
+  /// Requests a new verification code for the given email.
+  Future<void> resendVerification({required String email}) async {
+    await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/email/verification/resend',
+      data: {'email': email},
+    );
   }
 
   Future<void> logout() async {

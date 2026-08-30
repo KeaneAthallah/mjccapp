@@ -8,6 +8,7 @@ import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/map_provider.dart';
 import 'presentation/providers/master_data_provider.dart';
 import 'presentation/providers/profile_provider.dart';
+import 'presentation/providers/register_provider.dart';
 import 'presentation/providers/sos_provider.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/user_management_provider.dart';
@@ -25,6 +26,7 @@ class MJCCApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => RegisterProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..load()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),

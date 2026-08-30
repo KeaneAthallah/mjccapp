@@ -3,30 +3,34 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../../providers/register_provider.dart';
 import '../../widgets/app_logo.dart';
 import 'email_verification_screen.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+/// Public self-registration form. The backend decides the role and sends a
+/// verification email; the caller is routed to [EmailVerificationScreen].
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _obscure = true;
   String? _formError;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
@@ -35,29 +39,35 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _formError = null);
     if (form == null || !form.validate()) return;
     FocusScope.of(context).unfocus();
-    final auth = context.read<AuthProvider>();
-    final ok = await auth.login(
-      _emailController.text.trim(),
-      _passwordController.text,
+    final register = context.read<RegisterProvider>();
+    final ok = await register.register(
+      name: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      passwordConfirmation: _confirmController.text,
     );
-    if (!ok && mounted) {
-      if (auth.requiresVerification) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                EmailVerificationScreen(email: auth.verificationEmail!),
-          ),
-        );
-        return;
-      }
-      final fieldError = (auth.fieldErrors?['email'] as List?)
+    if (!mounted) return;
+    if (!ok) {
+      final fieldError = (register.fieldErrors?['email'] as List?)
           ?.cast<String>()
           .firstOrNull;
       final message =
-          fieldError ?? auth.error ?? 'Login gagal. Silakan coba lagi.';
+          fieldError ??
+          (register.fieldErrors?['password'] as List?)
+              ?.cast<String>()
+              .firstOrNull ??
+          register.error ??
+          'Pendaftaran gagal. Silakan coba lagi.';
       setState(() => _formError = message);
       _showError(message);
+      return;
     }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            EmailVerificationScreen(email: _emailController.text.trim()),
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -70,8 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final theme = context.watch<ThemeProvider>();
+    final register = context.watch<RegisterProvider>();
     final colors = AppThemeColors.of(context);
     return Scaffold(
       body: Stack(
@@ -114,10 +123,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Center(child: AppLogo(size: 80)),
+                            const Center(child: AppLogo(size: 72)),
                             const SizedBox(height: 12),
                             Text(
-                              'MOROWALI JUARA',
+                              'Daftar Akun',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 20,
@@ -128,14 +137,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Command Center Dashboard',
+                              'Buat akun untuk mengakses layanan MJCC',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: colors.textMuted,
                               ),
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 24),
                             if (_formError != null) ...[
                               Container(
                                 width: double.infinity,
@@ -173,13 +182,32 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 8),
                             ],
                             TextFormField(
+                              controller: _nameController,
+                              textCapitalization: TextCapitalization.words,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: 'Nama Lengkap',
+                                hintText: 'Nama Anda',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              validator: (v) {
+                                final value = v?.trim() ?? '';
+                                if (value.isEmpty) return 'Nama wajib diisi';
+                                if (value.length < 3) {
+                                  return 'Nama minimal 3 karakter';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               autofillHints: const [AutofillHints.email],
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
                                 labelText: 'Email',
-                                hintText: 'nama@morowali.go.id',
+                                hintText: 'nama@contoh.com',
                                 prefixIcon: Icon(Icons.mail_outline),
                               ),
                               validator: (v) {
@@ -196,11 +224,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _passwordController,
                               obscureText: _obscure,
-                              textInputAction: TextInputAction.done,
-                              onFieldSubmitted: (_) => _submit(),
+                              textInputAction: TextInputAction.next,
                               decoration: InputDecoration(
                                 labelText: 'Kata Sandi',
-                                hintText: '••••••••',
+                                hintText: 'Minimal 8 karakter',
                                 prefixIcon: const Icon(Icons.lock_outline),
                                 suffixIcon: IconButton(
                                   icon: Icon(
@@ -215,6 +242,30 @@ class _LoginScreenState extends State<LoginScreen> {
                               validator: (v) {
                                 if (v == null || v.isEmpty) {
                                   return 'Kata sandi wajib diisi';
+                                }
+                                if (v.length < 8) {
+                                  return 'Kata sandi minimal 8 karakter';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _confirmController,
+                              obscureText: _obscure,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submit(),
+                              decoration: const InputDecoration(
+                                labelText: 'Konfirmasi Kata Sandi',
+                                hintText: 'Ulangi kata sandi',
+                                prefixIcon: Icon(Icons.lock_outline),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return 'Konfirmasi kata sandi wajib diisi';
+                                }
+                                if (v != _passwordController.text) {
+                                  return 'Konfirmasi kata sandi tidak cocok';
                                 }
                                 return null;
                               },
@@ -240,7 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ],
                               ),
                               child: ElevatedButton(
-                                onPressed: auth.busy ? null : _submit,
+                                onPressed: register.busy ? null : _submit,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   disabledBackgroundColor: Colors.transparent,
@@ -253,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     letterSpacing: 1,
                                   ),
                                 ),
-                                child: auth.busy
+                                child: register.busy
                                     ? const SizedBox(
                                         height: 22,
                                         width: 22,
@@ -262,55 +313,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Text('MASUK'),
+                                    : const Text('DAFTAR'),
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            const Divider(),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 16),
                             Wrap(
                               alignment: WrapAlignment.center,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(
-                                  'Belum punya akun?',
+                                  'Sudah punya akun?',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: colors.textMuted,
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: auth.busy
+                                  onPressed: register.busy
                                       ? null
-                                      : () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  const RegisterScreen(),
-                                            ),
-                                          );
-                                        },
-                                  child: const Text('Daftar sekarang'),
+                                      : () => Navigator.of(context).maybePop(),
+                                  child: const Text('Masuk'),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Kabupaten Morowali · Sulawesi Tengah',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: colors.textMuted,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '© Morowali Juara Command Center',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: colors.textMuted,
-                              ),
                             ),
                           ],
                         ),
@@ -323,19 +347,14 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Positioned(
             top: 0,
-            right: 0,
+            left: 0,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: IconButton(
-                  tooltip: theme.isDark ? 'Mode terang' : 'Mode gelap',
-                  icon: Icon(
-                    theme.isDark
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
-                    color: Colors.white,
-                  ),
-                  onPressed: () => context.read<ThemeProvider>().toggle(),
+                  tooltip: 'Kembali',
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
             ),

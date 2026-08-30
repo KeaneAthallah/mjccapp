@@ -9,17 +9,18 @@ import '../../data/repositories/repositories.dart';
 
 /// Authentication state (login, logout, session restore).
 class AuthProvider extends ChangeNotifier {
-  AuthProvider() {
+  AuthProvider({AuthRepository? auth}) : _auth = auth ?? Repositories.instance.auth {
     ApiClient.instance.onUnauthorized = _handleUnauthorized;
   }
 
-  final AuthRepository _auth = Repositories.instance.auth;
+  final AuthRepository _auth;
 
   UserModel? _user;
   bool _initializing = true;
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _fieldErrors;
+  String? _verificationEmail;
 
   UserModel? get user => _user;
   bool get initializing => _initializing;
@@ -27,6 +28,11 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   Map<String, dynamic>? get fieldErrors => _fieldErrors;
   bool get isAuthenticated => _user != null;
+
+  /// Email that needs email verification, set when a login is rejected with
+  /// `verification_required`. Cleared on the next successful login attempt.
+  String? get verificationEmail => _verificationEmail;
+  bool get requiresVerification => _verificationEmail != null;
 
   UserRole get role => _user?.role ?? UserRole.viewer;
   bool get canWrite => role.canWrite;
@@ -45,10 +51,15 @@ class AuthProvider extends ChangeNotifier {
     _busy = true;
     _error = null;
     _fieldErrors = null;
+    _verificationEmail = null;
     notifyListeners();
     try {
       _user = await _auth.login(email, password);
       return true;
+    } on EmailNotVerifiedException catch (e) {
+      _verificationEmail = email;
+      _error = ErrorMessages.of(e);
+      return false;
     } on AppException catch (e) {
       _error = ErrorMessages.of(e);
       _fieldErrors = e.errors;
@@ -64,6 +75,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     _busy = true;
+    _verificationEmail = null;
     notifyListeners();
     await _auth.logout();
     _user = null;
@@ -82,6 +94,7 @@ class AuthProvider extends ChangeNotifier {
 
   void _handleUnauthorized() {
     _user = null;
+    _verificationEmail = null;
     notifyListeners();
   }
 }
