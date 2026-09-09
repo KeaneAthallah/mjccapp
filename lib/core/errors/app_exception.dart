@@ -33,8 +33,7 @@ class EmailNotVerifiedException extends AppException {
 
 /// Raised when the backend reports a validation failure (HTTP 422).
 class ValidationException extends AppException {
-  const ValidationException(super.message, {Map<String, dynamic>? errors})
-    : super(errors: errors);
+  const ValidationException(super.message, {super.errors});
 }
 
 /// Raised when there is no network connectivity.

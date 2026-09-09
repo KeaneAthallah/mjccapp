@@ -51,7 +51,7 @@ class AppHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (actions != null) actions!,
+        ?actions,
       ],
     );
   }

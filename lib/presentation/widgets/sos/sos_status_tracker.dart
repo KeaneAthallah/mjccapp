@@ -13,6 +13,8 @@ class SosStatusTracker extends StatelessWidget {
     (key: 'active', label: 'SOS Dikirim'),
     (key: 'acknowledged', label: 'SOS Diterima'),
     (key: 'responding', label: 'Petugas Menuju Lokasi'),
+    (key: 'on_the_way', label: 'Petugas di Perjalanan'),
+    (key: 'arrived', label: 'Petugas Tiba di Lokasi'),
     (key: 'resolved', label: 'SOS Selesai'),
   ];
 
@@ -20,8 +22,7 @@ class SosStatusTracker extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final isCancelled = alert.status == SosAlert.statusCancelled;
-    final current =
-        _steps.indexWhere((s) => s.key == alert.status);
+    final current = _stepIndex(alert.status);
 
     if (isCancelled) {
       return Container(
@@ -60,6 +61,18 @@ class SosStatusTracker extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  int _stepIndex(String status) {
+    return switch (status) {
+      SosAlert.statusActive => 0,
+      SosAlert.statusAcknowledged => 1,
+      SosAlert.statusResponding => 2,
+      SosAlert.statusOnTheWay => 3,
+      SosAlert.statusArrived => 4,
+      SosAlert.statusResolved => 5,
+      _ => -1,
+    };
   }
 
   Widget _stepRow({

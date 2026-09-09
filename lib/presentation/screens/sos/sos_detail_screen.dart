@@ -13,8 +13,10 @@ import '../../providers/auth_provider.dart';
 import '../../providers/sos_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_status_badge.dart';
 import '../../widgets/async_view.dart';
 import '../../widgets/sos/sos_status_tracker.dart';
+import 'responder_journey_screen.dart';
 
 /// Detail view of a single SOS alert with a map and management actions.
 class SosDetailScreen extends StatefulWidget {
@@ -102,6 +104,7 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
     final isManager = auth.canWrite;
     final canManage = isManager;
     final canCancel = alert.isOpen && (alert.isOwner || canManage);
+    final isResponder = auth.user?.isResponder ?? false;
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -112,6 +115,7 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
             title: 'Status SOS',
             subtitle: _formatDate(alert.createdAt),
             icon: Icons.sos,
+            trailing: _CategoryBadge(alert: alert),
             child: SosStatusTracker(alert: alert),
           ),
           if (alert.responseMessage != null)
@@ -120,12 +124,27 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
               icon: Icons.forum_outlined,
               child: Text(alert.responseMessage!),
             ),
+          if (isResponder && alert.userName != null)
+            AppCard(
+              title: 'Informasi Responder',
+              icon: Icons.emergency_outlined,
+              child: Column(
+                children: [
+                  _row('Petugas', alert.userName ?? '-'),
+                  if (alert.acceptedByUser != null)
+                    _row('Diambil oleh', alert.acceptedByUser!),
+                  if (alert.acceptedAt != null)
+                    _row('Waktu diterima', _formatDate(alert.acceptedAt)),
+                ],
+              ),
+            ),
           AppCard(
             title: 'Detail',
             icon: Icons.info_outline,
             child: Column(
               children: [
                 _row('Status', alert.statusLabel),
+                _row('Kategori', alert.categoryLabel),
                 if (alert.userName != null && auth.canWrite)
                   _row('Pelapor', alert.userName!),
                 _row(
@@ -165,10 +184,10 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                         point: LatLng(alert.latitude, alert.longitude),
                         width: 36,
                         height: 36,
-                        child: const Icon(
-                          Icons.sos,
+                        child: Icon(
+                          alert.categoryIcon,
                           size: 32,
-                          color: AppColors.red600,
+                          color: alert.categoryColor,
                         ),
                       ),
                     ],
@@ -177,6 +196,78 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
               ),
             ),
           ),
+          if (isResponder && alert.isOpen)
+            AppCard(
+              title: 'Tindakan Responder',
+              icon: Icons.handyman_outlined,
+              child: Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  if (alert.status == SosAlert.statusAccepted ||
+                      alert.status == SosAlert.statusOnTheWay ||
+                      alert.status == SosAlert.statusArrived)
+                    AppButton(
+                      label: 'Mulai Perjalanan',
+                      icon: Icons.navigation_outlined,
+                      variant: AppButtonVariant.primary,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ResponderJourneyScreen(alert: alert),
+                          ),
+                        );
+                      },
+                    ),
+                  if (alert.status == SosAlert.statusActive ||
+                      alert.status == SosAlert.statusAccepted ||
+                      alert.status == SosAlert.statusAcknowledged)
+                    AppButton(
+                      label: 'Terima',
+                      icon: Icons.inbox_outlined,
+                      onPressed: _busy
+                          ? null
+                          : () =>
+                              _setResponderAction(context, alert, 'accept'),
+                    ),
+                  if (alert.status == SosAlert.statusAcknowledged ||
+                      alert.status == SosAlert.statusOnTheWay ||
+                      alert.status == SosAlert.statusActive)
+                    AppButton(
+                      label: 'Menuju Lokasi',
+                      icon: Icons.directions_outlined,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: _busy
+                          ? null
+                          : () =>
+                              _setResponderAction(context, alert, 'ontheway'),
+                    ),
+                  if (alert.status == SosAlert.statusOnTheWay ||
+                      alert.status == SosAlert.statusArrived)
+                    AppButton(
+                      label: 'Tiba di Lokasi',
+                      icon: Icons.place_outlined,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: _busy
+                          ? null
+                          : () =>
+                              _setResponderAction(context, alert, 'arrived'),
+                    ),
+                  if (alert.status == SosAlert.statusAccepted ||
+                      alert.status == SosAlert.statusOnTheWay ||
+                      alert.status == SosAlert.statusArrived)
+                    AppButton(
+                      label: 'Selesaikan',
+                      icon: Icons.check_circle_outline,
+                      onPressed: _busy
+                          ? null
+                          : () =>
+                              _setResponderAction(context, alert, 'resolve'),
+                    ),
+                ],
+              ),
+            ),
           if (canManage || canCancel)
             AppCard(
               title: 'Tindakan',
@@ -189,7 +280,9 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                     AppButton(
                       label: 'Terima',
                       icon: Icons.inbox_outlined,
-                      onPressed: _busy ? null : () => _transition(SosTransition.acknowledge),
+                      onPressed: _busy
+                          ? null
+                          : () => _transition(SosTransition.acknowledge),
                     ),
                   if (canManage &&
                       (alert.status == SosAlert.statusActive ||
@@ -198,7 +291,9 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                       label: 'Menuju Lokasi',
                       icon: Icons.local_police_outlined,
                       variant: AppButtonVariant.secondary,
-                      onPressed: _busy ? null : () => _transition(SosTransition.respond),
+                      onPressed: _busy
+                          ? null
+                          : () => _transition(SosTransition.respond),
                     ),
                   if (canManage &&
                       (alert.status == SosAlert.statusAcknowledged ||
@@ -206,7 +301,9 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                     AppButton(
                       label: 'Selesaikan',
                       icon: Icons.check_circle_outline,
-                      onPressed: _busy ? null : () => _transition(SosTransition.resolve),
+                      onPressed: _busy
+                          ? null
+                          : () => _transition(SosTransition.resolve),
                     ),
                   if (canCancel)
                     AppButton(
@@ -221,6 +318,43 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _setResponderAction(
+    BuildContext context,
+    SosAlert alert,
+    String action,
+  ) async {
+    final provider = context.read<SosProvider>();
+    setState(() => _busy = true);
+    bool ok;
+    switch (action) {
+      case 'accept':
+        ok = await provider.acceptSos(alert.id);
+      case 'ontheway':
+        ok = await provider.onTheWaySos(alert.id);
+      case 'resolve':
+        ok = await provider.resolveSos(alert.id);
+      default:
+        ok = await provider.arrivedSos(alert.id);
+    }
+    await _refresh();
+    if (!context.mounted) return;
+    setState(() => _busy = false);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.error ?? 'Gagal memperbarui status. Coba lagi.',
+          ),
+          backgroundColor: AppColors.red600,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Status SOS diperbarui.')),
+      );
+    }
   }
 
   Future<void> _confirmCancel() async {
@@ -280,5 +414,21 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
     if (dt == null) return '';
     String two(int n) => n.toString().padLeft(2, '0');
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+}
+
+/// Colored category badge shown in the SOS header.
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.alert});
+
+  final SosAlert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppStatusBadge(
+      label: alert.categoryLabel,
+      color: alert.categoryColor,
+      icon: alert.categoryIcon,
+    );
   }
 }

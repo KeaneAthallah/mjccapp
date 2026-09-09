@@ -12,7 +12,7 @@ class UserManagementRepository {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/users',
       queryParameters: {
-        if (page != null) 'page': page,
+        'page': ?page,
         if (search != null && search.isNotEmpty) 'search': search,
         if (role != null && role.isNotEmpty) 'role': role,
       },
@@ -31,6 +31,7 @@ class UserManagementRepository {
     required String email,
     required String role,
     required String password,
+    String? responderType,
   }) async {
     final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
       '/users',
@@ -38,6 +39,7 @@ class UserManagementRepository {
         'name': name,
         'email': email,
         'role': role,
+        'responder_type': responderType,
         'password': password,
         'password_confirmation': password,
       },
@@ -51,17 +53,28 @@ class UserManagementRepository {
     String? email,
     String? role,
     String? password,
+    String? responderType,
   }) async {
     final response = await ApiClient.instance.dio.put<Map<String, dynamic>>(
       '/users/$id',
       data: {
-        if (name != null) 'name': name,
-        if (email != null) 'email': email,
-        if (role != null) 'role': role,
+        'name': ?name,
+        'email': ?email,
+        'role': ?role,
+        'responder_type': responderType,
         if (password != null && password.isNotEmpty) 'password': password,
         if (password != null && password.isNotEmpty)
           'password_confirmation': password,
       },
+    );
+    return UserModel.fromJson(response.data!['data'] as Map<String, dynamic>);
+  }
+
+  Future<UserModel> verifyEmail(int id, {bool verified = true}) async {
+    final response =
+        await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/users/$id/verify-email',
+      data: {'verified': verified},
     );
     return UserModel.fromJson(response.data!['data'] as Map<String, dynamic>);
   }

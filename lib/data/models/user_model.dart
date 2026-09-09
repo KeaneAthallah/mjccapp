@@ -19,6 +19,29 @@ enum UserRole {
   bool get isAdmin => this == UserRole.admin;
 }
 
+enum ResponderType {
+  medical,
+  fire,
+  police;
+
+  static ResponderType? fromString(String? value) {
+    return switch (value) {
+      'medical' => ResponderType.medical,
+      'fire' => ResponderType.fire,
+      'police' => ResponderType.police,
+      _ => null,
+    };
+  }
+
+  String get wire => name;
+
+  String get label => switch (this) {
+        ResponderType.medical => 'Medis',
+        ResponderType.fire => 'Pemadam Kebakaran',
+        ResponderType.police => 'Polisi',
+      };
+}
+
 /// User as returned by `POST /login`, `GET /me`, `GET /profile` and the
 /// admin `users` resource.
 class UserModel {
@@ -27,6 +50,8 @@ class UserModel {
     required this.name,
     required this.email,
     required this.role,
+    this.responderType,
+    this.emailVerified = true,
     this.createdAt,
     this.updatedAt,
   });
@@ -35,8 +60,12 @@ class UserModel {
   final String name;
   final String email;
   final UserRole role;
+  final ResponderType? responderType;
+  final bool emailVerified;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  bool get isResponder => responderType != null;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
@@ -44,6 +73,10 @@ class UserModel {
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       role: UserRole.fromString(json['role'] as String?),
+      responderType: ResponderType.fromString(
+        json['responder_type'] as String?,
+      ),
+      emailVerified: json['email_verified'] as bool? ?? true,
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? ''),
     );
@@ -55,6 +88,8 @@ class UserModel {
       'name': name,
       'email': email,
       'role': role.wire,
+      'responder_type': responderType?.wire,
+      'email_verified': emailVerified,
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };

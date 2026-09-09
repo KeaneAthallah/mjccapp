@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mjcc/data/models/sos_alert.dart';
@@ -48,12 +49,59 @@ void main() {
         });
 
     expect(make(SosAlert.statusActive).isOpen, isTrue);
+    expect(make(SosAlert.statusAccepted).isOpen, isTrue);
     expect(make(SosAlert.statusAcknowledged).isOpen, isTrue);
     expect(make(SosAlert.statusResponding).isOpen, isTrue);
+    expect(make(SosAlert.statusOnTheWay).isOpen, isTrue);
+    expect(make(SosAlert.statusArrived).isOpen, isTrue);
     expect(make(SosAlert.statusResolved).isOpen, isFalse);
     expect(make(SosAlert.statusCancelled).isOpen, isFalse);
     expect(make(SosAlert.statusResolved).statusLabel, 'Selesai');
     expect(make(SosAlert.statusCancelled).statusLabel, 'Dibatalkan');
+    expect(make(SosAlert.statusAccepted).statusLabel, 'Diterima');
+    expect(make(SosAlert.statusOnTheWay).statusLabel, 'Di Perjalanan');
+    expect(make(SosAlert.statusArrived).statusLabel, 'Tiba di Lokasi');
+  });
+
+  test('SosAlert categories parse into labels, icons and colors', () {
+    SosAlert make(String category) => SosAlert.fromJson({
+          'id': 1,
+          'user_id': 1,
+          'latitude': 0.0,
+          'longitude': 0.0,
+          'status': 'active',
+          'category': category,
+        });
+
+    expect(make(SosAlert.categoryMedical).categoryLabel, 'Medis');
+    expect(make(SosAlert.categoryFire).categoryLabel, 'Pemadam Kebakaran');
+    expect(make(SosAlert.categoryPolice).categoryLabel, 'Polisi');
+    expect(make(SosAlert.categoryGeneral).categoryLabel, 'Umum');
+    expect(make(SosAlert.categoryMedical).categoryIcon, Icons.medical_services_outlined);
+    expect(make(SosAlert.categoryFire).categoryIcon, Icons.local_fire_department_outlined);
+    expect(make(SosAlert.categoryPolice).categoryIcon, Icons.local_police_outlined);
+    expect(make(SosAlert.categoryGeneral).categoryIcon, Icons.help_outline);
+    expect(make(SosAlert.categoryMedical).categoryColor, isNotNull);
+  });
+
+  test('SosAlert parses accepted responder fields', () {
+    final alert = SosAlert.fromJson({
+      'id': 10,
+      'user_id': 5,
+      'latitude': -2.0,
+      'longitude': 121.0,
+      'status': 'accepted',
+      'category': 'medical',
+      'accepted_by': 3,
+      'accepted_by_user': {'id': 3, 'name': 'Dokter Andi'},
+      'accepted_at': '2026-09-09T11:30:00+08:00',
+    });
+
+    expect(alert.status, SosAlert.statusAccepted);
+    expect(alert.category, SosAlert.categoryMedical);
+    expect(alert.acceptedBy, 3);
+    expect(alert.acceptedByUser, 'Dokter Andi');
+    expect(alert.acceptedAt, isNotNull);
   });
 
   test('SosAlert tolerates partial payloads (list view shape)', () {
@@ -71,5 +119,6 @@ void main() {
     expect(alert.userRole, 'operator');
     expect(alert.accuracy, isNull);
     expect(alert.isActive, isTrue);
+    expect(alert.category, SosAlert.categoryGeneral);
   });
 }

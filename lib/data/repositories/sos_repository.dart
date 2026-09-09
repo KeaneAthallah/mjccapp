@@ -1,5 +1,6 @@
 import '../../core/network/api_client.dart';
 import '../../core/network/paginated.dart';
+import '../models/responder_location.dart';
 import '../models/sos_alert.dart';
 
 /// Repository for the SOS/emergency module.
@@ -15,8 +16,8 @@ class SosRepository {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/sos',
       queryParameters: {
-        if (page != null) 'page': page,
-        if (perPage != null) 'per_page': perPage,
+        'page': ?page,
+        'per_page': ?perPage,
         if (search != null && search.isNotEmpty) 'search': search,
         if (status != null && status.isNotEmpty) 'status': status,
         if (from != null && from.isNotEmpty) 'from': from,
@@ -52,6 +53,7 @@ class SosRepository {
     required double longitude,
     double? accuracy,
     String? message,
+    String category = 'general',
   }) async {
     final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
       '/sos',
@@ -60,6 +62,7 @@ class SosRepository {
         'longitude': longitude,
         'accuracy': accuracy,
         'message': message,
+        'category': category,
       },
     );
     return SosAlert.fromJson(ApiClient.envelopeData(response));
@@ -71,6 +74,18 @@ class SosRepository {
 
   Future<SosAlert> respond(int id, {String? message}) async {
     return _transition(id, 'respond', message);
+  }
+
+  Future<SosAlert> accept(int id, {String? message}) async {
+    return _transition(id, 'accept', message);
+  }
+
+  Future<SosAlert> onTheWay(int id, {String? message}) async {
+    return _transition(id, 'on-the-way', message);
+  }
+
+  Future<SosAlert> arrived(int id, {String? message}) async {
+    return _transition(id, 'arrived', message);
   }
 
   Future<SosAlert> resolve(int id, {String? message}) async {
@@ -89,6 +104,45 @@ class SosRepository {
     final data = response.data!['data'];
     if (data is! Map<String, dynamic>) return const {};
     return data.map((key, value) => MapEntry(key, (value as num).toInt()));
+  }
+
+  Future<List<SosAlert>> activeIncidents() async {
+    final response = await ApiClient.instance.dio
+        .get<Map<String, dynamic>>('/sos/active-incidents');
+    final data = response.data!['data'];
+    if (data is! List) return const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(SosAlert.fromJson)
+        .toList();
+  }
+
+  Future<SosAlert> updateLocation(
+    int id, {
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/sos/$id/location',
+      data: {
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    return SosAlert.fromJson(ApiClient.envelopeData(response));
+  }
+
+  /// Latest live location of each responder assigned to the alert, so the
+  /// requester can watch the petugas approach on a map.
+  Future<List<ResponderLocation>> responderLocations(int id) async {
+    final response = await ApiClient.instance.dio
+        .get<Map<String, dynamic>>('/sos/$id/responder-locations');
+    final data = response.data!['data'];
+    if (data is! List) return const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ResponderLocation.fromJson)
+        .toList();
   }
 
   Future<SosAlert> _transition(int id, String action, String? message) async {

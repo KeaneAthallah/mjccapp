@@ -16,13 +16,13 @@ class AuditRepository {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/audit',
       queryParameters: {
-        if (page != null) 'page': page,
+        'page': ?page,
         if (search != null && search.isNotEmpty) 'search': search,
-        if (userId != null) 'user': userId,
+        'user': ?userId,
         if (action != null && action.isNotEmpty) 'action': action,
         if (resource != null && resource.isNotEmpty) 'resource': resource,
-        if (from != null) 'from': from,
-        if (to != null) 'to': to,
+        'from': ?from,
+        'to': ?to,
       },
     );
     return Paginated<ActivityLog>.fromJson(

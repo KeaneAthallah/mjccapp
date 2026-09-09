@@ -6,7 +6,7 @@ class DashboardRepository {
   Future<DashboardOverview> overview({int? kecamatanId}) async {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/dashboard',
-      queryParameters: {if (kecamatanId != null) 'kecamatan_id': kecamatanId},
+      queryParameters: {'kecamatan_id': ?kecamatanId},
     );
     return DashboardOverview.fromJson(ApiClient.envelopeData(response));
   }
@@ -14,7 +14,7 @@ class DashboardRepository {
   Future<Map<String, dynamic>> education({int? kecamatanId}) async {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/dashboard/education',
-      queryParameters: {if (kecamatanId != null) 'kecamatan_id': kecamatanId},
+      queryParameters: {'kecamatan_id': ?kecamatanId},
     );
     return (response.data!['data'] as Map<String, dynamic>?) ?? const {};
   }
@@ -22,7 +22,7 @@ class DashboardRepository {
   Future<Map<String, dynamic>> security({int? kecamatanId}) async {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/dashboard/security',
-      queryParameters: {if (kecamatanId != null) 'kecamatan_id': kecamatanId},
+      queryParameters: {'kecamatan_id': ?kecamatanId},
     );
     return (response.data!['data'] as Map<String, dynamic>?) ?? const {};
   }
@@ -30,7 +30,7 @@ class DashboardRepository {
   Future<Map<String, dynamic>> health({int? kecamatanId}) async {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/dashboard/health',
-      queryParameters: {if (kecamatanId != null) 'kecamatan_id': kecamatanId},
+      queryParameters: {'kecamatan_id': ?kecamatanId},
     );
     return (response.data!['data'] as Map<String, dynamic>?) ?? const {};
   }

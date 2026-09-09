@@ -89,4 +89,18 @@ class AppColors {
     gray900,
     emerald700,
   ];
+
+  // --- Emergency responder colors ---
+  static const Color medicalPrimary = Color(0xFFEF4444);
+  static const Color medicalLight = Color(0xFFFEF2F2);
+  static const Color firePrimary = Color(0xFFF97316);
+  static const Color fireLight = Color(0xFFFFF7ED);
+  static const Color policePrimary = Color(0xFF3B82F6);
+  static const Color policeLight = Color(0xFFEFF6FF);
+
+  // --- SOS category colors ---
+  static const Color sosGeneral = Color(0xFF6B7280);
+  static const Color sosMedical = Color(0xFFEF4444);
+  static const Color sosFire = Color(0xFFF97316);
+  static const Color sosPolice = Color(0xFF3B82F6);
 }

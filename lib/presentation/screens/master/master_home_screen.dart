@@ -177,7 +177,7 @@ class SubjectTab extends StatelessWidget {
     }
     return ListView.separated(
       itemCount: subjects.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
       itemBuilder: (context, i) {
         final s = subjects[i];
         final colors = AppThemeColors.of(context);

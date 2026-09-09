@@ -51,6 +51,7 @@ class _UsersScreenState extends State<UsersScreen> {
             email: userForm.email,
             role: userForm.role.wire,
             password: userForm.password,
+            responderType: userForm.responderType?.wire,
           );
         } else {
           await repo.update(
@@ -59,6 +60,7 @@ class _UsersScreenState extends State<UsersScreen> {
             email: userForm.email,
             role: userForm.role.wire,
             password: userForm.password,
+            responderType: userForm.responderType?.wire,
           );
         }
         if (mounted) context.read<UserManagementProvider>().loadFirst();
@@ -67,6 +69,55 @@ class _UsersScreenState extends State<UsersScreen> {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text(e.message)));
         }
+      }
+    }
+  }
+
+  Future<void> _verifyEmail(UserModel user) async {
+    final verified = !user.emailVerified;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ubah Status Verifikasi'),
+        content: Text(
+          verified
+              ? 'Tandai email "${user.email}" sebagai terverifikasi?'
+              : 'Tandai email "${user.email}" sebagai belum terverifikasi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = Repositories.instance.userManagement;
+    try {
+      await repo.verifyEmail(user.id, verified: verified);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            verified
+                ? 'Email berhasil diverifikasi.'
+                : 'Email berhasil ditandai belum terverifikasi.',
+          ),
+        ),
+      );
+      if (mounted) {
+        context.read<UserManagementProvider>().loadFirst();
+      }
+    } on AppException catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -138,7 +189,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: provider.items.length + 1,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       if (index == provider.items.length) {
                         return _loadMore(provider);
@@ -180,10 +231,45 @@ class _UsersScreenState extends State<UsersScreen> {
                           user.name,
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        subtitle: Text(user.email),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.isResponder
+                                  ? '${user.email}  •  ${user.responderType!.label}'
+                                  : user.email,
+                            ),
+                            const SizedBox(height: 2),
+                            AppStatusBadge(
+                              label: user.emailVerified
+                                  ? 'Email terverifikasi'
+                                  : 'Belum diverifikasi',
+                              tone: user.emailVerified
+                                  ? BadgeTone.green
+                                  : BadgeTone.amber,
+                              icon: user.emailVerified
+                                  ? Icons.verified_outlined
+                                  : Icons.error_outline,
+                            ),
+                          ],
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            IconButton(
+                              icon: Icon(
+                                user.emailVerified
+                                    ? Icons.mark_email_read_outlined
+                                    : Icons.mark_email_unread_outlined,
+                                color: user.emailVerified
+                                    ? Colors.orange
+                                    : Colors.green,
+                              ),
+                              tooltip: user.emailVerified
+                                  ? 'Tandai belum diverifikasi'
+                                  : 'Verifikasi Email',
+                              onPressed: () => _verifyEmail(user),
+                            ),
                             AppStatusBadge(
                               label: user.role.wire,
                               tone: roleTone,
@@ -237,6 +323,7 @@ class UserFormData {
   late String name = user?.name ?? '';
   late String email = user?.email ?? '';
   late UserRole role = user?.role ?? UserRole.operator;
+  late ResponderType? responderType = user?.responderType;
   String password = '';
 }
 
@@ -259,6 +346,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
   );
   late final TextEditingController _password = TextEditingController();
   late UserRole _role = widget.data.role;
+  late ResponderType? _responderType = widget.data.responderType;
   bool _obscure = true;
 
   @override
@@ -316,6 +404,23 @@ class _UserFormDialogState extends State<UserFormDialog> {
                 onChanged: (v) => setState(() => _role = v ?? _role),
               ),
               const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<ResponderType?>(
+                initialValue: _responderType,
+                decoration: const InputDecoration(
+                  labelText: 'Peran Petugas',
+                  prefixIcon: Icon(Icons.local_police_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem<ResponderType?>(
+                    value: null,
+                    child: Text('Bukan petugas'),
+                  ),
+                  for (final t in ResponderType.values)
+                    DropdownMenuItem(value: t, child: Text(t.label)),
+                ],
+                onChanged: (v) => setState(() => _responderType = v),
+              ),
+              const SizedBox(height: AppSpacing.md),
               TextFormField(
                 controller: _password,
                 obscureText: _obscure,
@@ -352,6 +457,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
             widget.data.name = _name.text.trim();
             widget.data.email = _email.text.trim();
             widget.data.role = _role;
+            widget.data.responderType = _responderType;
             widget.data.password = _password.text;
             Navigator.pop(context, true);
           },

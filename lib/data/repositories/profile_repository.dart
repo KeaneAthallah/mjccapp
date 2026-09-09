@@ -13,7 +13,7 @@ class ProfileRepository {
   Future<String> update({String? email, String? name}) async {
     final response = await ApiClient.instance.dio.put<Map<String, dynamic>>(
       '/profile',
-      data: {if (email != null) 'email': email, if (name != null) 'name': name},
+      data: {'email': ?email, 'name': ?name},
     );
     return (response.data?['message'] as String?) ??
         'Profil berhasil diperbarui.';

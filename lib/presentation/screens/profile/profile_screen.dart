@@ -5,6 +5,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/repositories.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_card.dart';
@@ -246,6 +247,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
+                if (user?.isResponder ?? false) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _ResponderBadge(type: user!.responderType!),
+                ],
               ],
             ),
           ),
@@ -267,6 +272,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: _changePassword,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResponderBadge extends StatelessWidget {
+  const _ResponderBadge({required this.type});
+
+  final ResponderType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, icon, label) = switch (type) {
+      ResponderType.medical => (
+          AppColors.sosMedical,
+          Icons.medical_services_outlined,
+          'PETUGAS MEDIS',
+        ),
+      ResponderType.fire => (
+          AppColors.sosFire,
+          Icons.local_fire_department_outlined,
+          'PETUGAS PEMADAM KEBAKARAN',
+        ),
+      ResponderType.police => (
+          AppColors.sosPolice,
+          Icons.local_police_outlined,
+          'PETUGAS POLISI',
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
             ),
           ),
         ],

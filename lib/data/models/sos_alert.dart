@@ -1,3 +1,7 @@
+import 'package:flutter/material.dart';
+
+import '../../core/theme/app_colors.dart';
+
 /// SOS / emergency alert resource.
 class SosAlert {
   const SosAlert({
@@ -9,8 +13,12 @@ class SosAlert {
     required this.longitude,
     this.accuracy,
     required this.status,
+    this.category = categoryGeneral,
     this.message,
     this.responseMessage,
+    this.acceptedBy,
+    this.acceptedByUser,
+    this.acceptedAt,
     this.respondedAt,
     this.resolvedAt,
     this.createdAt,
@@ -20,10 +28,18 @@ class SosAlert {
   });
 
   static const String statusActive = 'active';
+  static const String statusAccepted = 'accepted';
   static const String statusAcknowledged = 'acknowledged';
   static const String statusResponding = 'responding';
+  static const String statusOnTheWay = 'on_the_way';
+  static const String statusArrived = 'arrived';
   static const String statusResolved = 'resolved';
   static const String statusCancelled = 'cancelled';
+
+  static const String categoryGeneral = 'general';
+  static const String categoryMedical = 'medical';
+  static const String categoryFire = 'fire';
+  static const String categoryPolice = 'police';
 
   final int id;
   final int userId;
@@ -33,8 +49,12 @@ class SosAlert {
   final double longitude;
   final double? accuracy;
   final String status;
+  final String category;
   final String? message;
   final String? responseMessage;
+  final int? acceptedBy;
+  final String? acceptedByUser;
+  final DateTime? acceptedAt;
   final DateTime? respondedAt;
   final DateTime? resolvedAt;
   final DateTime? createdAt;
@@ -44,19 +64,49 @@ class SosAlert {
 
   bool get isOpen => const {
         statusActive,
+        statusAccepted,
         statusAcknowledged,
         statusResponding,
+        statusOnTheWay,
+        statusArrived,
       }.contains(status);
 
   bool get isActive => status == statusActive;
 
   String get statusLabel => switch (status) {
         statusActive => 'Aktif',
+        statusAccepted => 'Diterima',
         statusAcknowledged => 'Diterima',
         statusResponding => 'Menuju Lokasi',
+        statusOnTheWay => 'Di Perjalanan',
+        statusArrived => 'Tiba di Lokasi',
         statusResolved => 'Selesai',
         statusCancelled => 'Dibatalkan',
         _ => status,
+      };
+
+  String get categoryLabel => switch (category) {
+        categoryGeneral => 'Umum',
+        categoryMedical => 'Medis',
+        categoryFire => 'Pemadam Kebakaran',
+        categoryPolice => 'Polisi',
+        _ => category,
+      };
+
+  IconData get categoryIcon => switch (category) {
+        categoryGeneral => Icons.help_outline,
+        categoryMedical => Icons.medical_services_outlined,
+        categoryFire => Icons.local_fire_department_outlined,
+        categoryPolice => Icons.local_police_outlined,
+        _ => Icons.help_outline,
+      };
+
+  Color get categoryColor => switch (category) {
+        categoryGeneral => AppColors.sosGeneral,
+        categoryMedical => AppColors.sosMedical,
+        categoryFire => AppColors.sosFire,
+        categoryPolice => AppColors.sosPolice,
+        _ => AppColors.sosGeneral,
       };
 
   factory SosAlert.fromJson(Map<String, dynamic> json) {
@@ -73,8 +123,16 @@ class SosAlert {
       longitude: (json['longitude'] as num).toDouble(),
       accuracy: (json['accuracy'] as num?)?.toDouble(),
       status: json['status'] as String? ?? statusActive,
+      category: json['category'] as String? ?? categoryGeneral,
       message: json['message'] as String?,
       responseMessage: json['response_message'] as String?,
+      acceptedBy: (json['accepted_by'] as num?)?.toInt(),
+      acceptedByUser: json['accepted_by_user'] is Map<String, dynamic>
+          ? (json['accepted_by_user'] as Map<String, dynamic>)['name'] as String?
+          : (json['accepted_by_user'] as String?),
+      acceptedAt: json['accepted_at'] != null
+          ? DateTime.tryParse(json['accepted_at'] as String)
+          : null,
       respondedAt: json['responded_at'] != null
           ? DateTime.tryParse(json['responded_at'] as String)
           : null,

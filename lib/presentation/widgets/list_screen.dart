@@ -123,7 +123,7 @@ class _ListScreenState<T> extends State<ListScreen<T>> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       floatingActionButton: widget.canWrite && widget.onCreate != null
-          ? widget.fab ?? null
+          ? widget.fab
           : null,
       body: Column(
         children: [
@@ -172,7 +172,7 @@ class _ListScreenState<T> extends State<ListScreen<T>> {
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: provider.items.length + 1,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       if (index == provider.items.length) {
                         return _buildLoader(provider);

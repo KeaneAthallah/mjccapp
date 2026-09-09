@@ -77,7 +77,7 @@ class _AuditScreenState extends State<AuditScreen> {
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: provider.items.length + 1,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       if (index == provider.items.length) {
                         if (provider.loadingMore) {

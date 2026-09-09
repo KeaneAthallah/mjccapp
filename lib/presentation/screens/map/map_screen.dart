@@ -4,10 +4,14 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../../data/models/map_data.dart';
+import '../../../data/models/sos_alert.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/master_data_provider.dart';
+import '../../providers/sos_provider.dart';
+import '../sos/sos_detail_screen.dart';
 
-/// Map screen: interactive OpenStreetMap with sector/type/kecamatan filters.
+/// Map screen: interactive OpenStreetMap with sector/type/kecamatan filters
+/// plus a live overlay of open SOS emergency incidents.
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -43,6 +47,7 @@ class _MapScreenState extends State<MapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MapProvider>().load();
       context.read<MasterDataProvider>().ensureLoaded().catchError((_) => []);
+      context.read<SosProvider>().loadActiveIncidents(silent: true);
     });
   }
 
@@ -139,6 +144,7 @@ class _MapScreenState extends State<MapScreen> {
       return _MapError(message: map.error!, onRetry: map.load);
     }
     final markers = map.data?.markers ?? [];
+    final incidents = context.watch<SosProvider>().activeIncidents;
 
     MapOptions options() => MapOptions(
           initialCenter: const LatLng(-2.1833, 121.4833),
@@ -150,7 +156,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
 
-    if (markers.isEmpty) {
+    if (markers.isEmpty && incidents.isEmpty) {
       return Column(
         children: [
           Expanded(
@@ -173,30 +179,50 @@ class _MapScreenState extends State<MapScreen> {
       options: options(),
       children: [
         _tileLayer(),
-        MarkerLayer(
-          markers: [
-            for (final m in markers)
-              if (m.hasCoordinates)
-                Marker(
-                  point: LatLng(m.latitude!, m.longitude!),
-                  width: 36,
-                  height: 36,
-                  child: GestureDetector(
-                    onTap: () => _showDetail(context, m),
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor:
-                          _colorFor(m.type).withValues(alpha: 0.25),
-                      child: Icon(
-                        _iconFor(m.type),
-                        size: 18,
-                        color: _colorFor(m.type),
+        if (markers.isNotEmpty)
+          MarkerLayer(
+            markers: [
+              for (final m in markers)
+                if (m.hasCoordinates)
+                  Marker(
+                    point: LatLng(m.latitude!, m.longitude!),
+                    width: 36,
+                    height: 36,
+                    child: GestureDetector(
+                      onTap: () => _showDetail(context, m),
+                      child: CircleAvatar(
+                        radius: 18,
+                        backgroundColor:
+                            _colorFor(m.type).withValues(alpha: 0.25),
+                        child: Icon(
+                          _iconFor(m.type),
+                          size: 18,
+                          color: _colorFor(m.type),
+                        ),
                       ),
                     ),
                   ),
+            ],
+          ),
+        if (incidents.isNotEmpty)
+          MarkerLayer(
+            markers: [
+              for (final incident in incidents.where((a) => a.isOpen))
+                Marker(
+                  point: LatLng(incident.latitude, incident.longitude),
+                  width: 34,
+                  height: 34,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SosDetailScreen(alertId: incident.id),
+                      ),
+                    ),
+                    child: _IncidentPin(incident: incident),
+                  ),
                 ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -309,6 +335,40 @@ class _MapError extends StatelessWidget {
               label: const Text('Coba lagi'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Pulsing map pin for an active SOS incident, colored by its category.
+class _IncidentPin extends StatelessWidget {
+  const _IncidentPin({required this.incident});
+
+  final SosAlert incident;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: incident.categoryColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: incident.categoryColor.withValues(alpha: 0.4),
+              blurRadius: 8,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Icon(
+          incident.categoryIcon,
+          size: 18,
+          color: Colors.white,
         ),
       ),
     );

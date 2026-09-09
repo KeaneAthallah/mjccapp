@@ -14,7 +14,10 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_states.dart';
 import '../../widgets/app_status_badge.dart';
 import '../../widgets/sos/sos_status_tracker.dart';
+import 'sos_create_screen.dart';
+import 'sos_detail_screen.dart';
 import 'sos_history_screen.dart';
+import 'responder_live_map_screen.dart';
 
 /// SOS emergency screen: sends a location-based SOS and tracks the user's
 /// own open alert through the operator workflow.
@@ -36,6 +39,7 @@ class _SosScreenState extends State<SosScreen> {
       _provider!.refreshMyOpen().then((_) {
         if (_provider!.hasOpen) _provider!.startPolling();
       });
+      _provider!.loadActiveIncidents(silent: true);
     });
   }
 
@@ -45,14 +49,26 @@ class _SosScreenState extends State<SosScreen> {
     super.dispose();
   }
 
+  Future<void> _openCreate() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const SosCreateScreen()),
+    );
+    if (created == true && mounted) {
+      await context.read<SosProvider>().refreshMyOpen();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SosProvider>();
+    final auth = context.watch<AuthProvider>();
+    final isResponder = auth.user?.isResponder ?? false;
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('SOS Darurat'),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           IconButton(
             tooltip: 'Riwayat SOS',
@@ -72,7 +88,11 @@ class _SosScreenState extends State<SosScreen> {
             if (provider.hasOpen)
               _ActiveAlertCard(provider: provider, colors: colors)
             else
-              _SendSosCard(provider: provider, colors: colors),
+              _SendSosCard(provider: provider, onSend: _openCreate),
+            if (isResponder) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _ResponderIncidents(provider: provider),
+            ],
             if (provider.error != null && !provider.hasOpen)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -101,13 +121,12 @@ class _SosScreenState extends State<SosScreen> {
   }
 }
 
-/// Shown when the user has no live alert: explains the feature and offers the
-/// big red send button.
+/// Entry card to start the new categorized SOS flow.
 class _SendSosCard extends StatelessWidget {
-  const _SendSosCard({required this.provider, required this.colors});
+  const _SendSosCard({required this.provider, required this.onSend});
 
   final SosProvider provider;
-  final ColorScheme colors;
+  final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -135,11 +154,12 @@ class _SendSosCard extends StatelessWidget {
                 width: double.infinity,
                 height: 132,
                 child: ElevatedButton(
-                  onPressed: provider.locating ? null : () => _confirmSend(context),
+                  onPressed: provider.locating ? null : onSend,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.red600,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.red600.withValues(alpha: 0.5),
+                    disabledBackgroundColor:
+                        AppColors.red600.withValues(alpha: 0.5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
@@ -158,14 +178,14 @@ class _SendSosCard extends StatelessWidget {
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.sos, size: 44),
+                            Icon(Icons.emergency_rounded, size: 40),
                             SizedBox(height: 6),
                             Text(
-                              'KIRIM SOS',
+                              'LAPORKAN DARURAT',
                               style: TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 2,
+                                letterSpacing: 1.5,
                               ),
                             ),
                           ],
@@ -198,81 +218,6 @@ class _SendSosCard extends StatelessWidget {
       ],
     );
   }
-
-  Future<void> _confirmSend(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.sos, color: AppColors.red600, size: 40),
-        title: const Text('Kirim SOS?'),
-        content: const Text(
-          'Lokasi Anda akan dikirim ke petugas. Apakah Anda yakin ingin '
-          'mengirim permintaan SOS darurat?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batalkan'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.red600),
-            child: const Text('Kirim SOS'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    unawaited(_send(context));
-  }
-
-  Future<void> _send(BuildContext context) async {
-    BuildContext? dialogContext;
-    // ignore: use_build_context_synchronously
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        dialogContext = ctx;
-        return const Dialog(
-          child: Padding(
-            padding: EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 3),
-                ),
-                SizedBox(width: AppSpacing.md),
-                Expanded(child: Text('Mencari lokasi Anda...')),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    final success = await context.read<SosProvider>().sendSos();
-
-    final dialog = dialogContext;
-    if (dialog != null && dialog.mounted) {
-      Navigator.of(dialog).pop();
-    }
-    if (!context.mounted) return;
-
-    final error = context.read<SosProvider>().error;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: success ? AppColors.emerald700 : AppColors.red600,
-        content: Text(
-          success
-              ? 'SOS terkirim! Petugas akan segera menghubungi Anda.'
-              : error ?? 'Gagal mengirim SOS. Coba lagi.',
-        ),
-      ),
-    );
-  }
 }
 
 /// Shown while the user has a live alert: live status tracker + cancel.
@@ -293,13 +238,30 @@ class _ActiveAlertCard extends StatelessWidget {
       subtitle: 'Petugas sedang memproses permintaan Anda',
       icon: Icons.notifications_active,
       trailing: AppStatusBadge(
-        label: alert.statusLabel,
+        label: '${alert.categoryLabel} · ${alert.statusLabel}',
         tone: _toneFor(alert.status),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SosStatusTracker(alert: alert),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Icon(alert.categoryIcon, size: 16, color: alert.categoryColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Kategori: ${alert.categoryLabel}',
+                  style: TextStyle(
+                    color: alert.categoryColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           if (alert.responseMessage != null)
             Container(
@@ -318,6 +280,19 @@ class _ActiveAlertCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.md),
+          if (alert.isOpen)
+            AppButton(
+              label: 'LIHAT PETA PETUGAS',
+              icon: Icons.map_outlined,
+              variant: AppButtonVariant.secondary,
+              expanded: true,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ResponderLiveMapScreen(alert: alert),
+                ),
+              ),
+            ),
+          const SizedBox(height: AppSpacing.xs),
           if (canCancel)
             AppButton(
               label: 'Batalkan SOS',
@@ -344,6 +319,8 @@ class _ActiveAlertCard extends StatelessWidget {
         SosAlert.statusActive => BadgeTone.red,
         SosAlert.statusAcknowledged => BadgeTone.amber,
         SosAlert.statusResponding => BadgeTone.blue,
+        SosAlert.statusOnTheWay => BadgeTone.blue,
+        SosAlert.statusArrived => BadgeTone.teal,
         SosAlert.statusResolved => BadgeTone.green,
         SosAlert.statusCancelled => BadgeTone.gray,
         _ => BadgeTone.gray,
@@ -380,6 +357,118 @@ class _ActiveAlertCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Active incidents list for responder users.
+class _ResponderIncidents extends StatelessWidget {
+  const _ResponderIncidents({required this.provider});
+
+  final SosProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppThemeColors.of(context);
+    final incidents = provider.activeIncidents.where((a) => a.isOpen).toList();
+
+    return AppCard(
+      title: 'Kejadian Aktif',
+      subtitle: 'Kejadian darurat yang membutuhkan tindakan',
+      icon: Icons.emergency_outlined,
+      trailing: AppStatusBadge(
+        label: '${incidents.length} aktif',
+        tone: incidents.isEmpty ? BadgeTone.green : BadgeTone.red,
+      ),
+      child: provider.loadingActive
+          ? const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : incidents.isEmpty
+              ? Text(
+                  'Tidak ada kejadian aktif saat ini.',
+                  style: TextStyle(color: colors.textMuted, fontSize: 13),
+                )
+              : Column(
+                  children: [
+                    for (final incident in incidents)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SosDetailScreen(alertId: incident.id),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: incident.categoryColor
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(
+                                    AppTheme.radiusSm - 2,
+                                  ),
+                                ),
+                                child: Icon(
+                                  incident.categoryIcon,
+                                  size: 20,
+                                  color: incident.categoryColor,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'SOS #${incident.id}'
+                                      '${incident.userName != null ? ' · ${incident.userName}' : ''}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colors.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      incident.statusLabel,
+                                      style: TextStyle(
+                                        color: colors.textMuted,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              AppStatusBadge(
+                                label: incident.statusLabel,
+                                tone: _toneFor(incident.status),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+    );
+  }
+
+  BadgeTone _toneFor(String status) => switch (status) {
+        SosAlert.statusActive => BadgeTone.red,
+        SosAlert.statusAcknowledged => BadgeTone.amber,
+        SosAlert.statusResponding => BadgeTone.blue,
+        SosAlert.statusOnTheWay => BadgeTone.blue,
+        SosAlert.statusArrived => BadgeTone.teal,
+        SosAlert.statusResolved => BadgeTone.green,
+        SosAlert.statusCancelled => BadgeTone.gray,
+        _ => BadgeTone.gray,
+      };
 }
 
 class _InfoRow extends StatelessWidget {

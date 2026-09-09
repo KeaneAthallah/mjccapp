@@ -19,8 +19,15 @@ Versi mobile dari dashboard Command Center Kabupaten Morowali
   - ADMIN       Manajemen Pengguna & Audit Log (hanya role admin)
   - PROFIL      edit profil & ganti kata sandi
   - DAFTAR      registrasi publik (role viewer) + verifikasi kode email 6 digit
+  - SOS         tombol darurat: buat SOS (kategori Medis/Pemadam Kebakaran/
+                Polisi + lokasi), detail alur status, riwayat, dan peta live
+                posisi petugas (responder)
+  - NOTIFIKASI  daftar notifikasi in-app; SOS baru membunyikan alarm lokal dan
+                bisa langsung dibuka ke detail SOS
 
 Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
+Petugas darurat ditandai `responderType` (medical/fire/police) sesuai kategori
+SOS yang mereka tangani.
 
 --------------------------------------------------------------------------------
 2.  TEKNOLOGI & VERSI
@@ -31,9 +38,13 @@ Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
   - flutter_secure_storage     (token/user/theme disimpan aman, Android Keystore)
   - intl ^0.20.2               (format tanggal & angka, locale id)
   - flutter_map ^8.3.2 + latlong2  (peta OpenStreetMap)
+  - geolocator ^14.0.2         (posisi perangkat, izin lokasi)
+  - flutter_local_notifications ^18.0.1  (notifikasi & alarm SOS lokal)
+  - permission_handler ^11.3.1 (izin notifikasi saat runtime)
   - flutter_lints ^6.0.0       (analisis statis)
   - Android: namespace/applicationId com.example.mjcc, izin INTERNET,
-    usesCleartextTraffic="true" (HTTP lokal selama pengembangan)
+    usesCleartextTraffic="true" (HTTP lokal selama pengembangan);
+    coreLibraryDesugaring + flutter_local_notifications (desugaring aktif)
 
 --------------------------------------------------------------------------------
 3.  STRUKTUR DIREKTORI UTAMA
@@ -49,6 +60,14 @@ Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
         api_client.dart           Dio singleton + autentikasi + normalisasi error
         api_response.dart         Model envelope { success, message, data, ... }
         paginated.dart            Model pagination dari blok meta Laravel
+        routing_service.dart      Hitung rute/polyline OSRM (Open Source Routing
+                                  Machine) untuk jalur petugas -> sender
+      location/
+        location_service.dart     Lokasi dasar (geolocator + geocode balik)
+        live_location_service.dart Stream lokasi berkelanjutan selama perjalanan
+      notifications/
+        notification_service.dart flutter_local_notifications: inisialisasi,
+                                  perizinan, saluran, alarm SOS berulang
       storage/secure_storage.dart Pembungkus flutter_secure_storage
       theme/
         app_colors.dart           Palet emerald/blue/status (ikon Tailwind)
@@ -58,16 +77,18 @@ Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
         error_messages.dart       Pesan error yang aman ditampilkan ke user
         formatters.dart           Tanggal & angka
     data/
-      models/                     1 model per API resource (School, Polsek, ...)
+      models/                     1 model per API resource (School, Polsek,
+                                  SosAlert, ResponderLocation, NotificationModel, ...)
       repositories/               N = repository/API service
         resource_api.dart         CRUD generik (index/show/create/update/dest)
         repositories.dart         Service locator (Singel Repositories.instance)
         resource khusus: auth, dashboard, map, profile, user_management, audit,
-        kecamatan (all + kelurahans), subject (all)
+        kecamatan (all + kelurahans), subject (all), sos, notification
     presentation/
       providers/                  ChangeNotifier per halaman/domain
       screens/                    Halaman (login, home, dashboard, map, master,
-                                  security, resources, users, audit, profile)
+                                  security, resources, users, audit, profile,
+                                  sos, notifications)
       widgets/                    Komponen UI yang dipakai ulang
     test/                         Widget & unit test (lihat bagian 8)
 
@@ -93,6 +114,12 @@ Envelope API (konsisten dari backend):
 
   - ApiResponse<T>::fromJson memparse data tunggal.
   - Paginated<T>::fromJson memparse data list + meta.
+
+Notifikasi TIDAK via FCM: aplikasi melakukan polling GET /notifications
+tiap 30 detik (NotificationProvider.startPolling), lalu menampilkan alarm
+lokal lewat flutter_local_notifications untuk SOS baru. Backend menulis baris
+ke tabel notifications (MySQL) saat SOS dibuat, hanya untuk responder dengan
+responderType sesuai kategori.
 
 --------------------------------------------------------------------------------
 5.  AUTENTIKASI & SESSION
@@ -122,6 +149,9 @@ Role (UserModel / enum UserRole):
   - viewer : hanya baca (canWrite = false); hide tombol tambah/edit/hapus.
   - operator : bisa menulis.
   - admin : bisa menulis + menu Pengguna & Audit Log.
+  - responderType (UserModel.responderType: medical/fire/police) : menandai
+    petugas darurat; hanya user dengan tipe ini yang menerima notifikasi SOS
+    pada kategori yang cocok.
 
 Error handling (AppException):
   - ApiClient mengubah DioException -> AppException (NetworkException utk
@@ -146,7 +176,15 @@ Error handling (AppException):
                       diakses dari daftar akun atau login yang ditolak.
   - MainScaffold      AppBar (logo, tombol theme/profil/keluar) + Drawer
                       bernavigasi dengan section (KETERTIBAN / PENDIDIKAN /
-                      KESEHATAN / MASTER DATA / ADMINISTRASI). Body = Dashboard.
+                      KESEHATAN / SOS / NOTIFIKASI / MASTER DATA /
+                      ADMINISTRASI). Body = Dashboard. Setelah frame pertama:
+                      minta izin notifikasi (permission_handler), load
+                      notifikasi (silent) lewat NotificationProvider.load(),
+                      lalu startPolling() (polling 30 detik). dispose memanggil
+                      stopPolling() (referensi provider disimpan di field, tidak
+                      memakai context.read di dispose). SOS baru yang belum
+                      dibaca memicu alarm lokal via NotificationService
+                      (showEmergencySos) & update badge di drawer.
   - DashboardScreen   Pull-to-refresh; welcome banner, dropdown filter
                       kecamatan, grid KPI (StatCard), kartu "Perlu Perhatian"
                       (critical/warning), top-ranking, rekap per kecamatan.
@@ -165,9 +203,32 @@ Error handling (AppException):
                       infinite scroll + CRUD via ResourceFormScreen.
   - UsersScreen       (admin) list pengguna, tambah/ubah role & password,
                       hapus. Loading stus: AsyncLoadingView/Empty/Error.
+                      Field responderType muncul untuk user bertipe operator.
   - AuditScreen       (admin) log aktivitas (GET /audit) + detail bottom-sheet.
   - ProfileScreen     kartu profil, ubah profil (PUT /profile), ganti sandi
                       (PUT /profile/password).
+  - SosScreen         ("button darurat" di MainScaffold) daftar SOS: tombol
+                      "BUAT SOS" -> SosCreateScreen; kartu SOS aktif/live
+                      (header warna-status, PT RUMAH, riwayat status) dengan
+                      tombol "LIHAT PETA PETUGAS" -> ResponderLiveMapScreen;
+                      tab Riwayat -> SosHistoryScreen memakai pagination.
+                      Memanggil GET /sos (dan /sos/my-open untuk sendernya).
+  - SosCreateScreen   Form kategori (Medis/Pemadam Kebakaran/Polisi) + pesan;
+                      kirim koordinat dari lokasi terkini (geolocator); POST
+                      /sos lalu force-refresh daftar.
+  - SosDetailScreen   Tampilkan detail SOS + alur status (SosStatusTracker):
+                      pending -> acknowledged -> on_the_way -> arrived ->
+                      resolved (dengan cancel). Tombol aksi per status & role:
+                      Respond/On The Way/Resolve/Cancel. Polling ringan saat
+                      SOS masih aktif agar status tetap segar.
+  - ResponderLiveMapScreen  Peta flutter_map: marker sender (❗) + marker
+                      petugas (🚓) dari GET /sos/{id}/responder-locations;
+                      polyline rute petugas->sender dari OSRM (RoutingService);
+                      poll 5 detik, cache rute per koordinat agar hemat bandwidth.
+  - NotificationScreen      Daftar notifikasi (GET /notifications, tandai-baca per
+                      item via POST /notifications/{id}/read). Item bertipe SOS
+                      membuka SosDetailScreen via data sos_alert_id (fallback
+                      sos_id). Provider polling 30 detik.
 
 --------------------------------------------------------------------------------
 7.  TOKEN & KEAMANAN
@@ -192,7 +253,10 @@ Error handling (AppException):
   - test/auth_flow_test.dart       Widget test alur autentikasi (login -> daftar
                                       -> verifikasi -> kirim ulang kode) dengan
                                       FakeAuthRepository tanpa koneksi jaringan.
-  - Jalankan: flutter test
+  - test/sos_alert_test.dart       Widget test model SosAlert & provider (index,
+                                      detail, kategori, respon, create) dengan
+                                      repository tiruan.
+  - Jalankan: flutter test  (21 test)
   - Analisis: flutter analyze
 
 --------------------------------------------------------------------------------

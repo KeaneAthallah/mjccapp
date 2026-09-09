@@ -11,7 +11,7 @@ class MapRepository {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '/maps',
       queryParameters: {
-        if (kecamatanId != null) 'kecamatan_id': kecamatanId,
+        'kecamatan_id': ?kecamatanId,
         if (sector != null && sector.isNotEmpty) 'sector': sector,
         if (type != null && type.isNotEmpty) 'type': type,
       },

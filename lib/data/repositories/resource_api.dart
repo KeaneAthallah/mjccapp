@@ -25,12 +25,12 @@ class ResourceApi<T> {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       _path,
       queryParameters: {
-        if (page != null) 'page': page,
-        if (perPage != null) 'per_page': perPage,
+        'page': ?page,
+        'per_page': ?perPage,
         if (search != null && search.isNotEmpty) 'search': search,
-        if (sort != null) 'sort': sort,
-        if (sortDirection != null) 'sort_direction': sortDirection,
-        if (filters != null) ...filters,
+        'sort': ?sort,
+        'sort_direction': ?sortDirection,
+        ...?filters,
       },
     );
     final body = response.data!;
@@ -72,8 +72,8 @@ class ResourceApi<T> {
     final response = await ApiClient.instance.dio.get<Map<String, dynamic>>(
       '$_path/trash',
       queryParameters: {
-        if (page != null) 'page': page,
-        if (perPage != null) 'per_page': perPage,
+        'page': ?page,
+        'per_page': ?perPage,
         if (search != null && search.isNotEmpty) 'search': search,
       },
     );

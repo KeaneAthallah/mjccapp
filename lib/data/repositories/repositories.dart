@@ -5,6 +5,7 @@ import 'health_facility_repository.dart';
 import 'kecamatan_repository.dart';
 import 'map_repository.dart';
 import 'market_repository.dart';
+import 'notification_repository.dart';
 import 'polsek_repository.dart';
 import 'poskamling_repository.dart';
 import 'profile_repository.dart';
@@ -35,4 +36,5 @@ class Repositories {
   final UserManagementRepository userManagement = UserManagementRepository();
   final AuditRepository audit = AuditRepository();
   final SosRepository sos = SosRepository();
+  final NotificationRepository notification = NotificationRepository();
 }

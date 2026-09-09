@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/location/location_service.dart';
+import '../../core/notifications/notification_service.dart';
 import '../../core/utils/error_messages.dart';
+import '../../data/models/responder_location.dart';
 import '../../data/models/sos_alert.dart';
 import '../../data/repositories/repositories.dart';
 import '../../data/repositories/sos_repository.dart';
@@ -18,11 +20,15 @@ class SosProvider extends ChangeNotifier {
 
   SosAlert? _myOpen;
   List<SosAlert> _items = [];
+  List<SosAlert> _activeIncidents = [];
+  List<ResponderLocation> _responderLocations = [];
   int _page = 1;
   int _lastPage = 1;
   bool _loading = false;
   bool _loadingMore = false;
   bool _locating = false;
+  bool _loadingActive = false;
+  bool _loadingResponderLocations = false;
   String? _error;
   Timer? _pollTimer;
   int _changeCounter = 0;
@@ -30,9 +36,14 @@ class SosProvider extends ChangeNotifier {
   SosAlert? get myOpen => _myOpen;
   bool get hasOpen => _myOpen != null;
   List<SosAlert> get items => List.unmodifiable(_items);
+  List<SosAlert> get activeIncidents => List.unmodifiable(_activeIncidents);
+  List<ResponderLocation> get responderLocations =>
+      List.unmodifiable(_responderLocations);
   bool get loading => _loading;
   bool get loadingMore => _loadingMore;
   bool get locating => _locating;
+  bool get loadingActive => _loadingActive;
+  bool get loadingResponderLocations => _loadingResponderLocations;
   String? get error => _error;
   bool get hasMore => _page < _lastPage;
 
@@ -85,7 +96,10 @@ class SosProvider extends ChangeNotifier {
   }
 
   /// Locates the device then sends the SOS. Returns `true` on success.
-  Future<bool> sendSos({String? message}) async {
+  Future<bool> sendSos({
+    String? message,
+    String category = 'general',
+  }) async {
     _locating = true;
     _error = null;
     notifyListeners();
@@ -96,10 +110,12 @@ class SosProvider extends ChangeNotifier {
         longitude: fix.longitude,
         accuracy: fix.accuracy,
         message: message,
+        category: category,
       );
       _myOpen = alert;
       _changeCounter++;
       startPolling();
+      _notifyRequesterCreated(alert);
       return true;
     } on LocationFailure catch (e) {
       _error = e.message;
@@ -140,6 +156,87 @@ class SosProvider extends ChangeNotifier {
     return alert;
   }
 
+  /// Uploads the responder's live GPS position to the backend (throttled).
+  Future<void> updateResponderLocation({
+    required int sosId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final updated = await _repo.updateLocation(
+        sosId,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      _replaceItem(updated);
+    } catch (_) {
+      // Best-effort location upload; a single failure should not break the
+      // responder journey. The tracker simply waits for the next interval.
+    }
+  }
+
+  /// Fetches the latest live location of each responder assigned to an alert,
+  /// so the requester can watch the petugas approach on a map.
+  Future<List<ResponderLocation>> loadResponderLocations(
+    int sosId, {
+    bool silent = false,
+  }) async {
+    if (!silent) {
+      _loadingResponderLocations = true;
+      notifyListeners();
+    }
+    try {
+      final locations = await _repo.responderLocations(sosId);
+      _responderLocations = locations;
+      return locations;
+    } catch (e) {
+      if (!silent) _error = ErrorMessages.of(e);
+      return const [];
+    } finally {
+      if (!silent) {
+        _loadingResponderLocations = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Resolves an SOS (arrived -> resolved).
+  Future<bool> resolveSos(int id, {String? message}) async {
+    try {
+      final updated = await _repo.resolve(id, message: message);
+      _replaceItem(updated);
+      if (_myOpen?.id == updated.id) {
+        _myOpen = updated;
+        _changeCounter++;
+        if (!updated.isOpen) stopPolling();
+      }
+      return true;
+    } catch (e) {
+      _error = ErrorMessages.of(e);
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Confirms to the requester (locally) that their SOS was sent.
+  /// Best-effort: failures here never affect the SOS creation result.
+  Future<void> _notifyRequesterCreated(SosAlert alert) async {
+    try {
+      await NotificationService.instance.showEmergencySos(
+        id: alert.id,
+        categoryLabel: alert.categoryLabel,
+        title: 'SOS Dikirim',
+        body:
+            'SOS ${alert.categoryLabel} Anda telah terkirim. Petugas akan segera '
+            'merespons. Pantau status di aplikasi.',
+      );
+    } catch (_) {
+      // Ignore — some devices may not be able to show a notification here,
+      // and the SOS is already recorded on the server.
+    }
+  }
+
   /// Fetches the first page of the inbox. With [silent] the loading state is
   /// left untouched so background polling does not flash the spinner.
   Future<void> loadHistory({bool silent = false}) async {
@@ -176,6 +273,76 @@ class SosProvider extends ChangeNotifier {
       _error = ErrorMessages.of(e);
     } finally {
       _loadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  /// Loads active incidents for responders.
+  Future<void> loadActiveIncidents({bool silent = false}) async {
+    if (!silent) {
+      _loadingActive = true;
+      notifyListeners();
+    }
+    try {
+      _activeIncidents = await _repo.activeIncidents();
+    } catch (e) {
+      if (!silent) _error = ErrorMessages.of(e);
+    } finally {
+      _loadingActive = false;
+      notifyListeners();
+    }
+  }
+
+  /// Accepts an SOS alert as a responder.
+  Future<bool> acceptSos(int id, {String? message}) async {
+    try {
+      final updated = await _repo.accept(id, message: message);
+      _replaceItem(updated);
+      if (_myOpen?.id == updated.id) {
+        _myOpen = updated;
+        _changeCounter++;
+      }
+      return true;
+    } catch (e) {
+      _error = ErrorMessages.of(e);
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Marks an SOS alert as on-the-way.
+  Future<bool> onTheWaySos(int id, {String? message}) async {
+    try {
+      final updated = await _repo.onTheWay(id, message: message);
+      _replaceItem(updated);
+      if (_myOpen?.id == updated.id) {
+        _myOpen = updated;
+        _changeCounter++;
+      }
+      return true;
+    } catch (e) {
+      _error = ErrorMessages.of(e);
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Marks an SOS alert as arrived.
+  Future<bool> arrivedSos(int id, {String? message}) async {
+    try {
+      final updated = await _repo.arrived(id, message: message);
+      _replaceItem(updated);
+      if (_myOpen?.id == updated.id) {
+        _myOpen = updated;
+        _changeCounter++;
+      }
+      return true;
+    } catch (e) {
+      _error = ErrorMessages.of(e);
+      return false;
+    } finally {
       notifyListeners();
     }
   }
