@@ -262,13 +262,21 @@ Error handling (AppException):
 --------------------------------------------------------------------------------
 9.  CARA MENJALANKAN / MENGOVERRIDE
 --------------------------------------------------------------------------------
-  - Emulator Android (host = 10.0.2.2):
+  - Emulator Android (host = 10.0.2.2, tanpa .env):
       flutter run
   - Perangkat fisik / server lain (harus di LAN yang sama atau publik):
-      flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
-  - Build APK rilis:
-      flutter build apk --release
+      salin .env.example -> .env, atur API_BASE_URL lalu:
+      flutter run --dart-define-from-file=.env
+  - Build APK rilis (baca API_BASE_URL dari .env):
+      flutter build apk --release --dart-define-from-file=.env
+    Atau override langsung tanpa .env:
+      flutter build apk --release --dart-define=API_BASE_URL=https://api.domain.com
+  - Ganti URL produksi cukup dengan mengubah API_BASE_URL di file .env
+    (mis. https://api.domain.com) lalu build ulang APK. .env tidak di-commit;
+    template permanen ada di .env.example.
   - Backend harus aktif: laravel serve / artisan di ../mjcc (port 8000).
+  - Nilai API_BASE_URL terkunci saat build (bukan runtime), jadi APK produksi
+    dan pengembangan harus di-build terpisah dengan .env masing-masing.
 
 --------------------------------------------------------------------------------
 10. KONVENSI KODE

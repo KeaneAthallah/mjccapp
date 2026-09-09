@@ -1,9 +1,15 @@
 /// Central application configuration.
 ///
-/// The API base URL is environment-aware and overridable at build time via
-/// `--dart-define=API_BASE_URL=...`. During local development from an Android
-/// emulator the host machine is reached via `10.0.2.2`. For a physical device
-/// or a real server pass the desired URL through `--dart-define`.
+/// The API base URL is environment-aware and overridable at build time.
+/// Production builds read it from the committed template `.env.example`
+/// (copied to `.env`) and pass it through `--dart-define-from-file`:
+///
+///     flutter build apk --release --dart-define-from-file=.env
+///
+/// The value can also be passed directly via
+/// `--dart-define=API_BASE_URL=...` (highest priority). During local
+/// development from an Android emulator the host machine is reached via
+/// `10.0.2.2` when no value is provided at all.
 library;
 
 import 'dart:io' show Platform;
@@ -22,7 +28,8 @@ const String _defaultDevBaseUrl = 'http://10.0.2.2:8000';
 ///
 /// Priority:
 ///  1. `API_BASE_URL` passed via `--dart-define` (highest).
-///  2. `AppEnvironment` selection.
+///  2. `--dart-define-from-file=.env` (recommended for release builds).
+///  3. Default from [`_defaultDevBaseUrl`].
 class AppConfig {
   AppConfig._();
 
