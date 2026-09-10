@@ -9,6 +9,7 @@ import 'notification_repository.dart';
 import 'polsek_repository.dart';
 import 'poskamling_repository.dart';
 import 'profile_repository.dart';
+import 'public_data_repository.dart';
 import 'school_repository.dart';
 import 'sos_repository.dart';
 import 'subject_repository.dart';
@@ -37,4 +38,5 @@ class Repositories {
   final AuditRepository audit = AuditRepository();
   final SosRepository sos = SosRepository();
   final NotificationRepository notification = NotificationRepository();
+  final PublicDataRepository publicData = PublicDataRepository();
 }

@@ -3,17 +3,25 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../data/models/map_data.dart';
 import '../../../data/models/sos_alert.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/master_data_provider.dart';
 import '../../providers/sos_provider.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_info_row.dart';
+import '../../widgets/app_status_badge.dart';
 import '../sos/sos_detail_screen.dart';
 
 /// Map screen: interactive OpenStreetMap with sector/type/kecamatan filters
 /// plus a live overlay of open SOS emergency incidents.
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.initialSector = ''});
+
+  /// Sector to select on first load, e.g. when opened from the Data hub
+  /// (`pendidikan`, `kesehatan`, `ketertiban`). Empty = all sectors.
+  final String initialSector;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -22,11 +30,11 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
 
-  static const _sectors = [
-    ('', 'Semua Sektor', null),
-    ('pendidikan', 'Pendidikan', Icons.school_outlined),
-    ('kesehatan', 'Kesehatan', Icons.medical_services_outlined),
-    ('ketertiban', 'Ketertiban', Icons.local_police_outlined),
+  static const _sectors = <({String key, String label, IconData? icon, Color color})>[
+    (key: '', label: 'Semua Sektor', icon: null, color: AppColors.gray600),
+    (key: 'pendidikan', label: 'Pendidikan', icon: Icons.school_outlined, color: AppColors.dataPendidikan),
+    (key: 'kesehatan', label: 'Kesehatan', icon: Icons.medical_services_outlined, color: AppColors.dataKesehatan),
+    (key: 'ketertiban', label: 'Ketertiban', icon: Icons.local_police_outlined, color: AppColors.dataKeamanan),
   ];
 
   static const _types = {
@@ -45,6 +53,9 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialSector.isNotEmpty) {
+        context.read<MapProvider>().setSector(widget.initialSector);
+      }
       context.read<MapProvider>().load();
       context.read<MasterDataProvider>().ensureLoaded().catchError((_) => []);
       context.read<SosProvider>().loadActiveIncidents(silent: true);
@@ -61,6 +72,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final map = context.watch<MapProvider>();
     final master = context.watch<MasterDataProvider>();
+    final t = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Peta MJCC')),
@@ -77,15 +89,21 @@ class _MapScreenState extends State<MapScreen> {
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (sector.$3 != null) ...[
-                          Icon(sector.$3, size: 16),
+                        if (sector.icon != null) ...[
+                          Icon(sector.icon, size: 16, color: _chip(t, sector)),
                           const SizedBox(width: 4),
                         ],
-                        Text(sector.$2),
+                        Text(sector.label),
                       ],
                     ),
-                    selected: map.sector == sector.$1,
-                    onSelected: (_) => map.setSector(sector.$1),
+                    selected: map.sector == sector.key,
+                    selectedColor: sector.color,
+                    labelStyle: TextStyle(
+                      color: _chip(t, sector),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                    onSelected: (_) => map.setSector(sector.key),
                   ),
               ],
             ),
@@ -101,6 +119,14 @@ class _MapScreenState extends State<MapScreen> {
                     ChoiceChip(
                       label: Text(type.$2),
                       selected: map.type == type.$1,
+                      selectedColor: _sectorColor(map.sector),
+                      labelStyle: TextStyle(
+                        color: map.type == type.$1
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
                       onSelected: (_) => map.setType(type.$1),
                     ),
                 ],
@@ -238,58 +264,61 @@ class _MapScreenState extends State<MapScreen> {
   void _showDetail(BuildContext context, MapMarker marker) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(marker.name, style: Theme.of(ctx).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            if (marker.sector.isNotEmpty) _infoRow('Sektor', marker.sector),
-            if (marker.kecamatan != null)
-              _infoRow('Kecamatan', marker.kecamatan!),
-            if (marker.kelurahan != null)
-              _infoRow('Kelurahan', marker.kelurahan!),
-            if (marker.status != null) _infoRow('Status', marker.status!),
-            if (marker.hasCoordinates)
-              _infoRow(
-                'Koordinat',
-                '${marker.latitude!.toStringAsFixed(5)}, '
-                '${marker.longitude!.toStringAsFixed(5)}',
-              ),
-          ],
+      builder: (ctx) => SafeArea(
+        child: AppCard(
+          icon: _iconFor(marker.type),
+          title: marker.name,
+          subtitle: marker.type.isEmpty ? null : marker.type,
+          padding: false,
+          trailing: marker.hasCoordinates
+              ? AppStatusBadge(
+                  label: marker.sector.isEmpty ? 'lokasi' : marker.sector,
+                  color: _colorFor(marker.type),
+                  icon: Icons.place,
+                )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (marker.kecamatan != null && marker.kecamatan!.isNotEmpty)
+                  AppInfoRow(label: 'Kecamatan', value: marker.kecamatan!),
+                if (marker.kelurahan != null && marker.kelurahan!.isNotEmpty)
+                  AppInfoRow(label: 'Kelurahan', value: marker.kelurahan!),
+                if (marker.status != null && marker.status!.isNotEmpty)
+                  AppInfoRow(label: 'Status', value: marker.status!),
+                if (marker.hasCoordinates)
+                  AppInfoRow(
+                    label: 'Koordinat',
+                    value: '${marker.latitude!.toStringAsFixed(5)}, '
+                        '${marker.longitude!.toStringAsFixed(5)}',
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
+  Color _sectorColor(String sector) {
+    return _sectors.firstWhere((s) => s.key == sector).color;
+  }
+
+  Color _chip(ThemeData t, ({String key, String label, IconData? icon, Color color}) sector) {
+    return sector.key.isEmpty ? t.colorScheme.onSurface : sector.color;
   }
 
   Color _colorFor(String type) {
     return switch (type) {
-      'school' => const Color(0xFF1565C0),
-      'health_facility' => const Color(0xFFE53935),
-      'polsek' => const Color(0xFF2E7D32),
-      'poskamling' => const Color(0xFFF57C00),
-      'market' => const Color(0xFF6A1B9A),
-      'tipkamtikmas' => const Color(0xFF00838F),
+      'school' => AppColors.dataPendidikan,
+      'health_facility' => AppColors.dataKesehatan,
+      'polsek' => AppColors.dataKeamanan,
+      'poskamling' => AppColors.dataKeamanan,
+      'market' => AppColors.dataFasilitas,
+      'tipkamtikmas' => AppColors.dataKeamanan,
       _ => Colors.blueGrey,
     };
   }

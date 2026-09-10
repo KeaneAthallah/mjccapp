@@ -6,13 +6,17 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/dashboard_overview.dart';
+import '../../../data/models/data_sector.dart';
+import '../../../data/models/public_data_overview.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/master_data_provider.dart';
+import '../../providers/public_data_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_states.dart';
 import '../../widgets/app_status_badge.dart';
 import '../../widgets/dashboard/stat_card.dart';
+import '../data/data_hub_screen.dart';
 import '../map/map_screen.dart';
 import '../resources/resource_screens.dart';
 import '../security/security_home_screen.dart';
@@ -33,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DashboardProvider>().load();
+      context.read<PublicDataProvider>().load();
       context.read<MasterDataProvider>().ensureLoaded().catchError((_) => []);
     });
   }
@@ -81,6 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           else if (overview != null) ...[
             _StatisticsGrid(overview: overview),
             const SizedBox(height: AppSpacing.xs),
+            const _DataPublikCard(),
             _AttentionCard(overview: overview),
             _SectionCard(
               title: 'Top Kecamatan · Sekolah',
@@ -193,6 +199,136 @@ class _StatisticsGrid extends StatelessWidget {
 
   String _fmt(int value) {
     return Formatters.number(value);
+  }
+}
+
+/// Data Publik quick-access card linking to the hub; taps into the Data tab's
+/// screens via the supported sectors.
+class _DataPublikCard extends StatelessWidget {
+  const _DataPublikCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PublicDataProvider>();
+    final overview = provider.overview;
+
+    return AppCard(
+      icon: Icons.dataset_outlined,
+      title: 'Data Publik',
+      subtitle: 'Statistik terbaru dari semua sektor',
+      trailing: IconButton(
+        tooltip: 'Lihat semua data',
+        icon: const Icon(Icons.arrow_forward, size: 18),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const DataHubScreen()),
+        ),
+      ),
+      child: provider.loading && overview == null
+          ? const SizedBox(
+              height: 120,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : overview == null
+              ? Text(
+                  'Belum ada data.',
+                  style: TextStyle(
+                    color: AppThemeColors.of(context).textMuted,
+                    fontSize: 13,
+                  ),
+                )
+              : _sectorTiles(context, overview),
+    );
+  }
+
+  Widget _sectorTiles(BuildContext context, PublicDataOverview overview) {
+    final entries = <(DataSector, int, String)>[
+      (DataSector.pendidikan, overview.pendidikan.sekolah, 'sekolah'),
+      (DataSector.kesehatan, overview.kesehatan.faskes, 'faskes'),
+      (DataSector.ketertiban, overview.ketertiban.total, 'aspek keamanan'),
+      (DataSector.fasilitas, overview.fasilitas.pasar, 'pasar'),
+    ];
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final (sector, count, noun) in entries)
+          _sectorTile(
+            context,
+            sector: sector,
+            count: count,
+            noun: noun,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => DataHubScreen(),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _sectorTile(
+    BuildContext context, {
+    required DataSector sector,
+    required int count,
+    required String noun,
+    required VoidCallback onTap,
+  }) {
+    final width = (MediaQuery.sizeOf(context).width - AppSpacing.md * 2 - AppSpacing.sm - AppSpacing.lg * 2) / 2;
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: sector.color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(sector.icon, size: 18, color: sector.color),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        sector.label,
+                        style: TextStyle(
+                          color: AppThemeColors.of(context).textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  Formatters.number(count),
+                  style: TextStyle(
+                    color: sector.color,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  noun,
+                  style: TextStyle(
+                    color: AppThemeColors.of(context).textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -582,19 +718,24 @@ class _WelcomeBanner extends StatelessWidget {
                 label: 'Ketertiban',
                 onTap: () => _push(context, const SecurityHomeScreen()),
               ),
-              _ActionChip(
-                icon: Icons.local_hospital_outlined,
-                label: 'Kesehatan',
-                onTap: () => _push(
-                  context,
-                  const HealthFacilityScreen(),
-                ),
-              ),
-              _ActionChip(
-                icon: Icons.map_outlined,
-                label: 'Peta',
-                onTap: () => _push(context, const MapScreen()),
-              ),
+_ActionChip(
+            icon: Icons.local_hospital_outlined,
+            label: 'Kesehatan',
+            onTap: () => _push(
+              context,
+              const HealthFacilityScreen(),
+            ),
+          ),
+          _ActionChip(
+            icon: Icons.dataset_outlined,
+            label: 'Data Publik',
+            onTap: () => _push(context, const DataHubScreen()),
+          ),
+          _ActionChip(
+            icon: Icons.map_outlined,
+            label: 'Peta',
+            onTap: () => _push(context, const MapScreen()),
+          ),
             ],
           ),
         ],

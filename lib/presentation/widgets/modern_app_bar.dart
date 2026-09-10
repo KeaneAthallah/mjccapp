@@ -14,12 +14,14 @@ class ModernAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onMenu,
     this.unreadCount = 0,
     this.onNotifications,
+    this.onProfile,
   });
 
   final String title;
   final VoidCallback? onMenu;
   final int unreadCount;
   final VoidCallback? onNotifications;
+  final VoidCallback? onProfile;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -130,6 +132,23 @@ class ModernAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           onPressed: () => context.read<ThemeProvider>().toggle(),
         ),
+        if (onProfile != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              tooltip: 'Profil',
+              icon: CircleAvatar(
+                radius: 15,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                child: const Icon(
+                  Icons.person_outline,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              onPressed: onProfile,
+            ),
+          ),
       ],
     );
   }

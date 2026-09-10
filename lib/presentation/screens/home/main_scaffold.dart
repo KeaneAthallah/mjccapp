@@ -9,6 +9,7 @@ import '../../widgets/app_logo.dart';
 import '../../widgets/modern_app_bar.dart';
 import '../audit/audit_screen.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../data/data_hub_screen.dart';
 import '../map/map_screen.dart';
 import '../master/master_home_screen.dart';
 import '../notifications/notification_screen.dart';
@@ -30,7 +31,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _index = 0;
   NotificationProvider? _notifications;
 
-  static const _titles = ['Beranda', 'Peta', 'SOS', 'Notifikasi', 'Profil'];
+  static const _titles = ['Beranda', 'Peta', 'Data', 'SOS', 'Notifikasi'];
 
   @override
   void initState() {
@@ -94,9 +95,9 @@ class _MainScaffoldState extends State<MainScaffold> {
       children: const [
         DashboardScreen(),
         MapScreen(),
+        DataHubScreen(),
         SosScreen(),
         NotificationScreen(),
-        ProfileScreen(),
       ],
     );
 
@@ -105,9 +106,10 @@ class _MainScaffoldState extends State<MainScaffold> {
         title: _titles[_index],
         onMenu: null,
         unreadCount: notif.unreadCount,
-        onNotifications: _index == 3
+        onNotifications: _index == 4
             ? null
-            : () => setState(() => _index = 3),
+            : () => setState(() => _index = 4),
+        onProfile: () => _go(context, const ProfileScreen()),
       ),
       drawer: _buildDrawer(context, auth),
       body: body,
@@ -126,6 +128,12 @@ class _MainScaffoldState extends State<MainScaffold> {
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map_rounded),
             label: 'Peta',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.school_outlined, color: AppColors.dataPendidikan),
+            selectedIcon: Icon(Icons.school_rounded, color: AppColors.dataPendidikan),
+            label: 'Data',
+            tooltip: 'Data Publik',
           ),
           NavigationDestination(
             icon: Icon(
@@ -175,11 +183,6 @@ class _MainScaffoldState extends State<MainScaffold> {
             ),
             selectedIcon: const Icon(Icons.notifications_rounded),
             label: 'Notifikasi',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profil',
           ),
         ],
       ),

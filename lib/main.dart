@@ -10,6 +10,7 @@ import 'presentation/providers/map_provider.dart';
 import 'presentation/providers/master_data_provider.dart';
 import 'presentation/providers/notification_provider.dart';
 import 'presentation/providers/profile_provider.dart';
+import 'presentation/providers/public_data_provider.dart';
 import 'presentation/providers/register_provider.dart';
 import 'presentation/providers/sos_provider.dart';
 import 'presentation/providers/theme_provider.dart';
@@ -43,6 +44,7 @@ class MJCCApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProfileProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => SosProvider()),
+        ChangeNotifierProvider(create: (_) => PublicDataProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, theme, _) {

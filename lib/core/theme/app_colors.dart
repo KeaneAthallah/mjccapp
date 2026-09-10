@@ -103,4 +103,10 @@ class AppColors {
   static const Color sosMedical = Color(0xFFEF4444);
   static const Color sosFire = Color(0xFFF97316);
   static const Color sosPolice = Color(0xFF3B82F6);
+
+  // --- Data Publik sector colors (map legend on the website) ---
+  static const Color dataPendidikan = Color(0xFF0D9488); // teal-600
+  static const Color dataKesehatan = Color(0xFFF97316); // orange-500
+  static const Color dataKeamanan = Color(0xFF7C3AED); // violet-600
+  static const Color dataFasilitas = Color(0xFFF59E0B); // amber-500
 }

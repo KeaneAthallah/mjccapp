@@ -8,30 +8,42 @@ perkembangan data wilayah secara real-time.
 
 ## Tentang Aplikasi
 
-MJCC menyatukan data ketiga sektor (pendidikan, kesehatan, dan ketertiban/keamanan)
-dalam satu pusat kendali. Aplikasi Android ini menampilkan dashboard, peta gabungan,
-data master, pengelolaan pengguna, audit log, hingga fitur darurat (SOS) yang bekerja
-secara langsung (live).
+MJCC menyatukan data sektor publik dalam satu pusat kendali. Aplikasi Android ini
+menampilkan dashboard, peta gabungan, **Data Publik** (Pendidikan, Kesehatan,
+Ketertiban, dan Fasilitas Publik), pengelolaan pengguna, audit log, hingga fitur
+darurat (SOS) yang bekerja secara langsung (live). Navigasi bawah utama:
+**Beranda | Peta | Data | SOS | Notifikasi** dengan Profil di pojok kanan header.
 
 ## Fitur Utama
 
-- **Dashboard Pusat Kendali** — ringkasan statistik tiga sektor (sekolah, fasilitas
-  kesehatan, poskamling/pasar) beserta alert "Perlu Perhatian".
+- **Dashboard Pusat Kendali** — ringkasan statistik sektor (sekolah, fasilitas
+  kesehatan, poskamling/pasar) beserta alert "Perlu Perhatian" dan kartu akses
+  **Data Publik**.
+- **Data Publik** — halaman hub empat sektor (Pendidikan, Kesehatan, Ketertiban,
+  Fasilitas Publik) yang membaca **API publik Laravel tanpa token**
+  (`/api/v1/public/*`): ringkasan overview, daftar per kategori dengan pencarian
+  tersaring dan paginasi, halaman detail, serta toggle **Daftar ↔ Peta** per sektor.
 - **Peta Gabungan** — peta interaktif dengan penanda seluruh aset wilayah per kategori
-  (SD/SMP, Puskesmas, Rumah Sakit, Polsek, Kelurahan, Pasar, Poskamling, Tipkamtikmas).
+  (SD/SMP, Puskesmas, Rumah Sakit, Polsek, Kelurahan, Pasar, Poskamling, Tipkamtikmas)
+  dengan filter sektor/kecamatan, warna penanda sesuai sektor Data Publik, dan
+  bottom-sheet info lokasi.
 - **SOS Darurat (Live)** — tombol darurat satu sentuhan:
   - Mengirim lokasi GPS (geolocator) beserta akurasi dan pesan opsional ke pusat kendali.
   - Melacak status penanganan secara **otomatis setiap 15 detik** tanpa perlu refresh.
+  - Responder/petugas menjalani alur **TERIMA SOS → MULAI PERJALANAN → SUDAH TIBA → SELESAIKAN**
+    dengan **rute jalan OSRM** (`router.project-osrm.org`), jarak & estimasi waktu,
+    dan upload lokasi live petugas agar pemohon dapat melihat petugas mendekat.
   - Operator/admin dapat menerima, menuju lokasi, menyelesaikan, atau membatalkan SOS.
   - Inbox/riwayat SOS ikut diperbarui otomatis saat berada di halaman teratas.
-- **Data Pendidikan** — pengelolaan sekolah.
+- **Data Pendidikan** — pengelolaan sekolah (CRUD untuk operator/admin).
 - **Data Kesehatan** — pengelolaan fasilitas kesehatan (Puskesmas, Pustu, Rumah Sakit, dll).
 - **Data Ketertiban** — polsek, tipkamtikmas, poskamling, dan pasar.
 - **Data Master** — kecamatan, kelurahan, dan subjek/mata pelajaran.
 - **Manajemen Pengguna** — kelola akun (khusus admin).
 - **Daftar Akun & Verifikasi Email** — registrasi mandiri via API (role selalu `viewer` dari backend) dikonfirmasi kode 6 digit dari email, ditampilkan dengan email termask, plus tombol kirim ulang kode dengan jeda 60 detik.
 - **Audit Log** — jejak aktivitas sistem (khusus admin).
-- **Profil** — ubah data diri, foto, dan kata sandi.
+- **Profil** — ubah data diri, foto, dan kata sandi (dibuka dari ikon header).
+- **Notifikasi** — daftar notifikasi lokal berbasis polling dengan badge jumlah belum dibaca, deep-link ke SOS.
 - **Tema Gelap/Terang** — pengaturan tema dalam aplikasi.
 - **Dukungan peran (role)** — `viewer`, `operator`, dan `admin` dengan hak akses berbeda.
 
@@ -84,15 +96,15 @@ lib/
 ├── core/                  # Konfigurasi, jaringan (Dio), storage, tema, util
 │   ├── config/            # AppConfig (base URL API)
 │   ├── location/          # LocationService (GPS untuk SOS)
-│   ├── network/           # ApiClient, ApiResponse, pagination
+│   ├── network/           # ApiClient, ApiResponse, pagination, RoutingService (OSRM)
 │   ├── storage/           # Secure storage (token)
-│   └── theme/             # Warna, spacing, tema terang/gelap
+│   └── theme/             # Warna (termasuk palet sektor Data Publik), spacing, tema
 ├── data/
-│   ├── models/            # Model data (school, health, polsek, sos_alert, dll)
-│   └── repositories/      # Akses API per modul
+│   ├── models/            # Model data (school, health, polsek, sos_alert, public data, dll)
+│   └── repositories/      # Akses API per modul (termasuk public_data_repository)
 └── presentation/
-    ├── providers/         # State management (Provider)
-    ├── screens/           # Halaman: dashboard, map, master, sos, users, audit, dll
+    ├── providers/         # State management (Provider) + public_list_providers
+    ├── screens/           # Halaman: dashboard, map, data (hub/list/detail), sos, users, audit, dll
     └── widgets/           # Komponen UI yang dapat digunakan kembali
 ```
 
@@ -103,9 +115,10 @@ flutter analyze
 flutter test
 ```
 
-Test mencakup parsing model (mis. `DashboardOverview`, `SosAlert`), smoke test
-aplikasi, serta alur autentikasi (login, registrasi akun, verifikasi kode email,
-kirim ulang kode) yang dijalankan dengan repositori tiruan tanpa koneksi jaringan.
+Test mencakup parsing model (mis. `DashboardOverview`, `SosAlert`, `PublicDataOverview`),
+smoke test aplikasi, pengujian widget desain sistem, serta alur autentikasi (login,
+registrasi akun, verifikasi kode email, kirim ulang kode) yang dijalankan dengan
+repositori tiruan tanpa koneksi jaringan.
 
 ## Informasi Tambahan
 
