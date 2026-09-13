@@ -72,103 +72,227 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final map = context.watch<MapProvider>();
     final master = context.watch<MasterDataProvider>();
-    final t = Theme.of(context);
+    final sos = context.watch<SosProvider>();
+    final empty =
+        !map.loading && map.error == null &&
+        (map.data?.markers ?? []).isEmpty &&
+        sos.activeIncidents.isEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Peta MJCC')),
-      body: Column(
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final sector in _sectors)
-                  ChoiceChip(
-                    label: Row(
+          _buildMap(map),
+          Positioned(top: 8, left: 0, right: 0, child: _buildTopFilters(map, master)),
+          if (empty)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(999),
+                  color: Theme.of(context).colorScheme.surface,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (sector.icon != null) ...[
-                          Icon(sector.icon, size: 16, color: _chip(t, sector)),
-                          const SizedBox(width: 4),
-                        ],
-                        Text(sector.label),
+                        Icon(Icons.location_off_outlined, size: 18, color: Theme.of(context).colorScheme.outline),
+                        const SizedBox(width: 8),
+                        const Text('Tidak ada lokasi untuk filter ini.'),
                       ],
                     ),
-                    selected: map.sector == sector.key,
-                    selectedColor: sector.color,
-                    labelStyle: TextStyle(
-                      color: _chip(t, sector),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                    onSelected: (_) => map.setSector(sector.key),
                   ),
-              ],
-            ),
-          ),
-          if (map.sector.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final type in _types[map.sector]!)
-                    ChoiceChip(
-                      label: Text(type.$2),
-                      selected: map.type == type.$1,
-                      selectedColor: _sectorColor(map.sector),
-                      labelStyle: TextStyle(
-                        color: map.type == type.$1
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                      onSelected: (_) => map.setType(type.$1),
-                    ),
-                ],
-              ),
-            ),
-          if (master.kecamatans != null && master.kecamatans!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: DropdownButtonFormField<int>(
-                initialValue: map.kecamatanId ?? -1,
-                decoration: const InputDecoration(
-                  labelText: 'Kecamatan',
-                  prefixIcon: Icon(Icons.place_outlined),
                 ),
-                items: [
-                  const DropdownMenuItem<int>(
-                    value: -1,
-                    child: Text('Semua Kecamatan'),
-                  ),
-                  for (final k in master.kecamatans!)
-                    DropdownMenuItem<int>(
-                      value: k.id,
-                      child: Text(k.name ?? '-'),
-                    ),
-                ],
-                onChanged: (v) => map.setKecamatan(v == -1 ? null : v),
               ),
             ),
-          const SizedBox(height: 4),
-          Expanded(child: _buildMap(map)),
+          if (map.loading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          if (map.error != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: _MapError(message: map.error!, onRetry: map.load),
+              ),
+            ),
         ],
       ),
     );
   }
 
+  /// Compact floating filter controls pinned to the top of the map.
+  Widget _buildTopFilters(MapProvider map, MasterDataProvider master) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _floatingChipRow(
+          children: [
+            for (final sector in _sectors)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: ChoiceChip(
+                  showCheckmark: false,
+                  avatar: sector.icon == null
+                      ? null
+                      : Icon(
+                          sector.icon,
+                          size: 15,
+                          color: map.sector == sector.key
+                              ? Colors.white
+                              : sector.color,
+                        ),
+                  label: Text(sector.label),
+                  selected: map.sector == sector.key,
+                  selectedColor: sector.color,
+                  labelStyle: TextStyle(
+                    color: _chip(Theme.of(context), sector),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => map.setSector(sector.key),
+                ),
+              ),
+          ],
+        ),
+        if (map.sector.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _floatingChipRow(
+            children: [
+              for (final type in _types[map.sector]!)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: ChoiceChip(
+                    showCheckmark: false,
+                    label: Text(type.$2),
+                    selected: map.type == type.$1,
+                    selectedColor: _sectorColor(map.sector),
+                    labelStyle: TextStyle(
+                      color: map.type == type.$1
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => map.setType(type.$1),
+                  ),
+                ),
+            ],
+          ),
+        ],
+        if (master.kecamatans != null && master.kecamatans!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Material(
+              elevation: 3,
+              borderRadius: BorderRadius.circular(999),
+              color: Theme.of(context).colorScheme.surface,
+              child: FilterChip(
+                showCheckmark: false,
+                avatar: Icon(
+                  Icons.place_outlined,
+                  size: 15,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                label: Text(_kecamatanLabel(master, map.kecamatanId)),
+                selected: map.kecamatanId != null,
+                selectedColor: AppColors.emerald600,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => _pickKecamatan(map, master),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Horizontally scrollable row of chip filters on a floating surface.
+  Widget _floatingChipRow({required List<Widget> children}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Material(
+        elevation: 3,
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.surface,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(children: children),
+        ),
+      ),
+    );
+  }
+
+  String _kecamatanLabel(MasterDataProvider master, int? id) {
+    if (id == null) return 'Semua Kecamatan';
+    final kecamatans = master.kecamatans;
+    if (kecamatans == null) return 'Kecamatan';
+    for (final k in kecamatans) {
+      if (k.id == id) return k.name ?? 'Kecamatan';
+    }
+    return 'Kecamatan';
+  }
+
+  Future<void> _pickKecamatan(MapProvider map, MasterDataProvider master) async {
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final selected = map.kecamatanId;
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Pilih Kecamatan',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.public, color: AppColors.dataPendidikan),
+                title: const Text('Semua Kecamatan'),
+                trailing: selected == null
+                    ? const Icon(Icons.check_circle, color: AppColors.emerald600)
+                    : null,
+                onTap: () => Navigator.pop(ctx, -1),
+              ),
+              for (final k in master.kecamatans!)
+                ListTile(
+                  leading: const Icon(Icons.place_outlined),
+                  title: Text(k.name ?? '-'),
+                  trailing: selected == k.id
+                      ? const Icon(Icons.check_circle, color: AppColors.emerald600)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, k.id),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen != null) {
+      map.setKecamatan(chosen == -1 ? null : chosen);
+    }
+  }
+
   Widget _buildMap(MapProvider map) {
-    if (map.loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (map.error != null) {
-      return _MapError(message: map.error!, onRetry: map.load);
-    }
     final markers = map.data?.markers ?? [];
     final incidents = context.watch<SosProvider>().activeIncidents;
 
@@ -181,24 +305,6 @@ class _MapScreenState extends State<MapScreen> {
             flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
         );
-
-    if (markers.isEmpty && incidents.isEmpty) {
-      return Column(
-        children: [
-          Expanded(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: options(),
-              children: [_tileLayer()],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('Tidak ada lokasi untuk filter ini.'),
-          ),
-        ],
-      );
-    }
 
     return FlutterMap(
       mapController: _mapController,

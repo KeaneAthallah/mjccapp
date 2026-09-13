@@ -8,7 +8,10 @@ import '../../data/repositories/repositories.dart';
 /// State for the Data Publik hub: loads the sector overview once and keeps it
 /// available for category screens.
 class PublicDataProvider extends ChangeNotifier {
-  final PublicDataRepository _repo = Repositories.instance.publicData;
+  PublicDataProvider({PublicDataRepository? repository})
+      : _repo = repository ?? Repositories.instance.publicData;
+
+  final PublicDataRepository _repo;
 
   PublicDataOverview? _overview;
   bool _loading = false;

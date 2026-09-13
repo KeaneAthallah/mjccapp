@@ -72,6 +72,8 @@ class AppStatusBadge extends StatelessWidget {
           ],
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: c,
               fontSize: 11,

@@ -393,6 +393,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<UserRole>(
                 initialValue: _role,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Peran',
                   prefixIcon: Icon(Icons.admin_panel_settings_outlined),
@@ -406,6 +407,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<ResponderType?>(
                 initialValue: _responderType,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Peran Petugas',
                   prefixIcon: Icon(Icons.local_police_outlined),

@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/sos_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_info_row.dart';
 import '../../widgets/app_states.dart';
 import '../../widgets/app_status_badge.dart';
 import '../../widgets/sos/sos_status_tracker.dart';
@@ -220,7 +221,8 @@ class _SendSosCard extends StatelessWidget {
   }
 }
 
-/// Shown while the user has a live alert: live status tracker + cancel.
+/// Shown while the user has a live alert: prominent "SOS AKTIF" banner with
+/// live status tracker, alert details and actions.
 class _ActiveAlertCard extends StatelessWidget {
   const _ActiveAlertCard({required this.provider, required this.colors});
 
@@ -232,82 +234,106 @@ class _ActiveAlertCard extends StatelessWidget {
     final alert = provider.myOpen!;
     final auth = context.read<AuthProvider>();
     final canCancel = alert.isOpen && (alert.isOwner || auth.canWrite);
+    final theme = AppThemeColors.of(context);
 
-    return AppCard(
-      title: 'SOS Anda Sedang Aktif',
-      subtitle: 'Petugas sedang memproses permintaan Anda',
-      icon: Icons.notifications_active,
-      trailing: AppStatusBadge(
-        label: '${alert.categoryLabel} · ${alert.statusLabel}',
-        tone: _toneFor(alert.status),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.red600.withValues(alpha: 0.18),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SosStatusTracker(alert: alert),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Icon(alert.categoryIcon, size: 16, color: alert.categoryColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Kategori: ${alert.categoryLabel}',
+          _banner(alert),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SosStatusTracker(alert: alert),
+                const SizedBox(height: AppSpacing.md),
+                AppInfoRow(
+                  label: 'Kategori',
+                  value: alert.categoryLabel,
+                ),
+                AppInfoRow(
+                  label: 'Waktu Lapor',
+                  value: _formatTime(alert.createdAt),
+                ),
+                AppInfoRow(
+                  label: 'Koordinat',
+                  value:
+                      '${alert.latitude.toStringAsFixed(5)}, '
+                      '${alert.longitude.toStringAsFixed(5)}',
+                ),
+                if (alert.acceptedByUser != null)
+                  AppInfoRow(
+                    label: 'Petugas',
+                    value: alert.acceptedByUser!,
+                  ),
+                if (alert.message != null && alert.message!.isNotEmpty) ...[
+                  AppInfoRow(label: 'Pesan', value: alert.message!),
+                  const SizedBox(height: AppSpacing.xs),
+                ],
+                if (alert.responseMessage != null)
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.blue50,
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusSm - 3),
+                    ),
+                    child: Text(
+                      alert.responseMessage!,
+                      style: const TextStyle(
+                        color: AppColors.blue800,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                if (alert.isOpen)
+                  AppButton(
+                    label: 'LIHAT PETA PETUGAS',
+                    icon: Icons.map_outlined,
+                    variant: AppButtonVariant.secondary,
+                    expanded: true,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ResponderLiveMapScreen(alert: alert),
+                      ),
+                    ),
+                  ),
+                if (canCancel) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  AppButton(
+                    label: 'Batalkan SOS',
+                    icon: Icons.cancel_outlined,
+                    variant: AppButtonVariant.danger,
+                    expanded: true,
+                    onPressed: () => _confirmCancel(context),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Status diperbarui secara otomatis setiap beberapa detik.',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: alert.categoryColor,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: 11,
+                    color: theme.textMuted,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (alert.responseMessage != null)
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.blue50,
-                borderRadius: BorderRadius.circular(AppTheme.radiusSm - 3),
-              ),
-              child: Text(
-                alert.responseMessage!,
-                style: const TextStyle(
-                  color: AppColors.blue800,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          const SizedBox(height: AppSpacing.md),
-          if (alert.isOpen)
-            AppButton(
-              label: 'LIHAT PETA PETUGAS',
-              icon: Icons.map_outlined,
-              variant: AppButtonVariant.secondary,
-              expanded: true,
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ResponderLiveMapScreen(alert: alert),
-                ),
-              ),
-            ),
-          const SizedBox(height: AppSpacing.xs),
-          if (canCancel)
-            AppButton(
-              label: 'Batalkan SOS',
-              icon: Icons.cancel_outlined,
-              variant: AppButtonVariant.danger,
-              expanded: true,
-              onPressed: () => _confirmCancel(context),
-            ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Status diperbarui secara otomatis setiap beberapa detik.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.outline,
+              ],
             ),
           ),
         ],
@@ -315,16 +341,106 @@ class _ActiveAlertCard extends StatelessWidget {
     );
   }
 
-  BadgeTone _toneFor(String status) => switch (status) {
-        SosAlert.statusActive => BadgeTone.red,
-        SosAlert.statusAcknowledged => BadgeTone.amber,
-        SosAlert.statusResponding => BadgeTone.blue,
-        SosAlert.statusOnTheWay => BadgeTone.blue,
-        SosAlert.statusArrived => BadgeTone.teal,
-        SosAlert.statusResolved => BadgeTone.green,
-        SosAlert.statusCancelled => BadgeTone.gray,
-        _ => BadgeTone.gray,
-      };
+  Widget _banner(SosAlert alert) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.red700, AppColors.red600],
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.sos, size: 28, color: AppColors.red600),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'SOS AKTIF',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    _liveDot(),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        '#${alert.id} · ${alert.categoryLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              alert.statusLabel.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveDot() {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.9),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime? d) {
+    if (d == null) return '-';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${d.day}/${d.month}/${d.year} · ${two(d.hour)}:${two(d.minute)} WITA';
+  }
 
   Future<void> _confirmCancel(BuildContext context) async {
     final confirmed = await showDialog<bool>(

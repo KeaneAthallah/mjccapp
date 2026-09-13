@@ -6,7 +6,10 @@ class SecureStorage {
   SecureStorage._();
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    // v11 default (RSA OAEP + AES-GCM). `migrateOnAlgorithmChange` defaults to
+    // true, so data written by v9 (Jetpack encryptedSharedPreferences) is
+    // migrated automatically on first read.
+    aOptions: AndroidOptions(),
   );
 
   static const String _tokenKey = 'auth_token';

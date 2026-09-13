@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/sos_alert.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/sos_provider.dart';
@@ -81,11 +83,11 @@ class _SosHistoryScreenState extends State<SosHistoryScreen> {
           _moreCalled = false;
           return RefreshIndicator(
             onRefresh: provider.loadHistory,
-            child: ListView.separated(
+            child: ListView.builder(
               controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.md),
               itemCount: provider.items.length + 1,
-              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 if (index == provider.items.length) {
                   if (provider.loadingMore) {
@@ -103,40 +105,9 @@ class _SosHistoryScreenState extends State<SosHistoryScreen> {
                   return const SizedBox.shrink();
                 }
                 final alert = provider.items[index];
-                return ListTile(
-                  leading: _avatar(alert),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'SOS #${alert.id}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      AppStatusBadge(
-                        label: alert.statusLabel,
-                        tone: _toneFor(alert.status),
-                      ),
-                    ],
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      [
-                        if (auth.canWrite && alert.userName != null)
-                          '${alert.userName} •',
-                        _formatDate(alert.createdAt),
-                      ].join(' '),
-                    ),
-                  ),
-                  isThreeLine: alert.message != null && alert.message!.isNotEmpty,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          SosDetailScreen(alertId: alert.id),
-                    ),
-                  ),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _historyCard(context, alert, auth.canWrite),
                 );
               },
             ),
@@ -146,20 +117,94 @@ class _SosHistoryScreenState extends State<SosHistoryScreen> {
     );
   }
 
-  Widget _avatar(SosAlert alert) {
-    final color = alert.isActive ? AppColors.red600 : AppColors.emerald600;
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.12),
-      ),
-      child: Icon(
-        alert.isActive ? Icons.sos : Icons.emergency_outlined,
-        size: 20,
-        color: color,
+  Widget _historyCard(BuildContext context, SosAlert alert, bool canWrite) {
+    final colors = Theme.of(context).colorScheme;
+    final isOpen = alert.isOpen;
+    return Material(
+      color: colors.surface,
+      elevation: isOpen ? 2 : 0.5,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      shadowColor: isOpen ? AppColors.red600.withValues(alpha: 0.3) : null,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SosDetailScreen(alertId: alert.id),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: isOpen
+                ? Border.all(color: AppColors.red200, width: 1.2)
+                : Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: alert.categoryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm - 2),
+                ),
+                child: Icon(
+                  alert.categoryIcon,
+                  size: 22,
+                  color: alert.categoryColor,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'SOS #${alert.id}'
+                            '${alert.userName != null && canWrite ? ' · ${alert.userName}' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        AppStatusBadge(
+                          label: alert.statusLabel,
+                          tone: _toneFor(alert.status),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${alert.categoryLabel} · ${_formatDate(alert.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    if (alert.message != null && alert.message!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        alert.message!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: colors.outline),
+            ],
+          ),
+        ),
       ),
     );
   }

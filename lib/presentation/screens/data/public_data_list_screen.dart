@@ -1,13 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../data/models/chart_data.dart';
 import '../../../data/models/data_sector.dart';
+import '../../../data/models/public_data_overview.dart';
 import '../../providers/list_provider.dart';
+import '../../providers/public_data_provider.dart';
 import '../../providers/public_list_providers.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/async_view.dart';
+import '../../widgets/charts/app_charts.dart';
 import '../../widgets/data_entity_tile.dart';
 import '../map/map_screen.dart';
 import 'public_data_detail_screen.dart';
@@ -27,6 +35,7 @@ class PublicDataListScreen extends StatefulWidget {
 class _PublicDataListScreenState extends State<PublicDataListScreen> {
   late List<PublicDataEntity> _entities;
   late PublicDataEntity _selected;
+  late bool _hasEntities;
 
   final _searchController = TextEditingController();
   Timer? _debounce;
@@ -37,11 +46,14 @@ class _PublicDataListScreenState extends State<PublicDataListScreen> {
   void initState() {
     super.initState();
     _entities = PublicDataEntity.forSector(widget.sector);
-    _selected = _entities.first;
-    _provider = _createProvider(_selected);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _provider!.loadFirst();
-    });
+    _hasEntities = _entities.isNotEmpty;
+    if (_hasEntities) {
+      _selected = _entities.first;
+      _provider = _createProvider(_selected);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _provider!.loadFirst();
+      });
+    }
   }
 
   @override
@@ -97,8 +109,18 @@ class _PublicDataListScreenState extends State<PublicDataListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasEntities) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.sector.label)),
+        body: const Center(
+          child: AsyncEmptyView(message: 'Belum ada kategori data untuk sektor ini.'),
+        ),
+      );
+    }
+
     final colors = AppThemeColors.of(context);
     final provider = _provider!;
+    final overview = context.watch<PublicDataProvider>().overview;
 
     return Scaffold(
       appBar: AppBar(
@@ -113,6 +135,7 @@ class _PublicDataListScreenState extends State<PublicDataListScreen> {
       ),
       body: Column(
         children: [
+          if (overview != null) _SectorSummary(sector: widget.sector, overview: overview),
           if (_entities.length > 1)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -254,9 +277,7 @@ class _PublicDataListScreenState extends State<PublicDataListScreen> {
     return parts.isEmpty ? null : parts.join(' • ');
   }
 
-  String? _statusOf(dynamic item) {
-    return (item as dynamic).status as String?;
-  }
+  String? _statusOf(dynamic item) => statusLabelFor(_selected, item);
 
   void _openDetail(BuildContext context, dynamic item) {
     final id = (item as dynamic).id as int;
@@ -280,5 +301,166 @@ class _PublicDataListScreenState extends State<PublicDataListScreen> {
       });
     }
     return const SizedBox.shrink();
+  }
+}
+
+/// Compact per-sector stat header: KPI tiles + a doughnut / horizontal bar so
+/// each category screen shows real charts instead of a bare list.
+class _SectorSummary extends StatelessWidget {
+  const _SectorSummary({required this.sector, required this.overview});
+
+  final DataSector sector;
+  final PublicDataOverview overview;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = overview.pendidikan;
+    final k = overview.kesehatan;
+    final kt = overview.ketertiban;
+    final f = overview.fasilitas;
+
+    final (kpis, chart) = switch (sector) {
+      DataSector.pendidikan => (
+          <({String label, int value, Color color})>[
+            (label: 'Sekolah', value: p.sekolah, color: AppColors.dataPendidikan),
+            (label: 'Siswa', value: p.siswa, color: AppColors.emerald600),
+            (label: 'Guru', value: p.guru, color: AppColors.blue600),
+          ],
+          AppCharts.doughnut(
+            context: context,
+            height: 160,
+            chart: SingleSeriesChart(
+              labels: const ['SD', 'SMP'],
+              data: [p.sd.toDouble(), p.smp.toDouble()],
+            ),
+          ) as Widget?,
+        ),
+      DataSector.kesehatan => (
+          <({String label, int value, Color color})>[
+            (label: 'Faskes', value: k.faskes, color: AppColors.dataKesehatan),
+            (label: 'Dokter', value: k.dokter, color: AppColors.red500),
+            (label: 'Perawat', value: k.perawat, color: AppColors.blue600),
+            (label: 'Bidan', value: k.bidan, color: AppColors.emerald600),
+          ],
+          HorizontalBarList(
+            color: AppColors.dataKesehatan,
+            items: [
+              (label: 'Puskesmas', value: k.puskesmas, pct: null),
+              (label: 'Pustu', value: k.pustu, pct: null),
+              (label: 'Rumah Sakit', value: k.rs, pct: null),
+              (label: 'Posyandu', value: k.posyandu, pct: null),
+            ],
+          ) as Widget?,
+        ),
+      DataSector.ketertiban => (
+          <({String label, int value, Color color})>[
+            (label: 'Polsek', value: kt.polsek, color: AppColors.dataKeamanan),
+            (label: 'Poskamling', value: kt.poskamling, color: AppColors.dataKeamanan),
+            (label: 'Tipkamtikmas', value: kt.tipkamtikmas, color: AppColors.red500),
+          ],
+          AppCharts.doughnut(
+            context: context,
+            height: 160,
+            chart: SingleSeriesChart(
+              labels: const ['Polsek', 'Poskamling', 'Tipkamtikmas'],
+              data: [
+                kt.polsek.toDouble(),
+                kt.poskamling.toDouble(),
+                kt.tipkamtikmas.toDouble(),
+              ],
+            ),
+          ) as Widget?,
+        ),
+      DataSector.fasilitas => (
+          <({String label, int value, Color color})>[
+            (label: 'Pasar', value: f.pasar, color: AppColors.dataFasilitas),
+            (label: 'Kecamatan', value: f.kecamatan, color: AppColors.amber600),
+            (label: 'Kelurahan', value: f.kelurahan, color: AppColors.blue600),
+            (label: 'Penduduk', value: f.penduduk, color: AppColors.emerald600),
+          ],
+          HorizontalBarList(
+            color: AppColors.dataFasilitas,
+            items: [
+              (label: 'Kecamatan', value: f.kecamatan, pct: null),
+              (label: 'Kelurahan', value: f.kelurahan, pct: null),
+              (label: 'Pasar', value: f.pasar, pct: null),
+            ],
+          ) as Widget?,
+        ),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: AppCard(
+        title: 'Ringkasan ${sector.label}',
+        subtitle: 'Statistik terkini sektor ini',
+        icon: sector.icon,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final tileWidth = (constraints.maxWidth - AppSpacing.sm) / 2;
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final kpi in kpis)
+                      SizedBox(width: tileWidth, child: _KpiTile(kpi: kpi)),
+                  ],
+                );
+              },
+            ),
+            if (chart != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              chart,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KpiTile extends StatelessWidget {
+  const _KpiTile({required this.kpi});
+
+  final ({String label, int value, Color color}) kpi;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppThemeColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 10),
+      decoration: BoxDecoration(
+        color: kpi.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            Formatters.number(kpi.value),
+            style: TextStyle(
+              color: kpi.color,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            kpi.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

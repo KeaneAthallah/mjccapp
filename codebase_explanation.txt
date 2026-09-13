@@ -24,6 +24,15 @@ Versi mobile dari dashboard Command Center Kabupaten Morowali
                 posisi petugas (responder)
   - NOTIFIKASI  daftar notifikasi in-app; SOS baru membunyikan alarm lokal dan
                 bisa langsung dibuka ke detail SOS
+  - DATA PUBLIK hub statistik seluruh sektor (Pendidikan / Kesehatan /
+                Ketertiban / Fasilitas Publik): kartu KPI yang bisa diketuk,
+                diagram donat + legenda sumber data, kartu sektor, lalu
+                layar daftar per sektor (pencarian, pagination, ringkasan +
+                grafik) dan halaman detail yang informatif per entitas
+                (Identitas, Statistik, Sarana & Prasarana, dst.)
+  - SEKTOR      layar dashboard per sektor (SectorDashboardScreen) + layar
+                "Lainnya" (MoreScreen) mengelompokkan akses ke semua sektor
+                dan data publik
 
 Akses berbasis role: admin, operator (bisa menulis), viewer (hanya baca).
 Petugas darurat ditandai `responderType` (medical/fire/police) sesuai kategori
@@ -35,7 +44,13 @@ SOS yang mereka tangani.
   - Flutter (Dart SDK ^3.13.2)
   - dio ^5.7.0                 (HTTP client + interceptor token)
   - provider ^6.1.2            (state management, ChangeNotifier)
-  - flutter_secure_storage     (token/user/theme disimpan aman, Android Keystore)
+  - flutter_secure_storage ^11.1.1 (token/user/theme disimpan aman, Android
+                                Keystore; pakai AndroidOptions() bawaan:
+                                RSA OAEP + AES-GCM, auto-migrasi data v9)
+  - fl_chart ^0.69.2           (grafik: doughnut/pie & bar untuk statistik)
+  - package_info_plus ^10.2.0  (lewat dependency_overrides; menghilangkan
+                                warning KGP karena hanya menambahkan KGP
+                                bila AGP < 9; app memakai AGP 9.1.0)
   - intl ^0.20.2               (format tanggal & angka, locale id)
   - flutter_map ^8.3.2 + latlong2  (peta OpenStreetMap)
   - geolocator ^14.0.2         (posisi perangkat, izin lokasi)
@@ -44,7 +59,9 @@ SOS yang mereka tangani.
   - flutter_lints ^6.0.0       (analisis statis)
   - Android: namespace/applicationId com.example.mjcc, izin INTERNET,
     usesCleartextTraffic="true" (HTTP lokal selama pengembangan);
-    coreLibraryDesugaring + flutter_local_notifications (desugaring aktif)
+    coreLibraryDesugaring + flutter_local_notifications (desugaring aktif);
+    org.gradle.jvmargs + --enable-native-access=ALL-UNNAMED (menghilangkan
+    peringatan native-access Gradle saat build); AGP 9.1.0 / Gradle 9.3.1
 
 --------------------------------------------------------------------------------
 3.  STRUKTUR DIREKTORI UTAMA
@@ -88,8 +105,11 @@ SOS yang mereka tangani.
       providers/                  ChangeNotifier per halaman/domain
       screens/                    Halaman (login, home, dashboard, map, master,
                                   security, resources, users, audit, profile,
-                                  sos, notifications)
+                                  sos, notifications, data (hub/list/detail),
+                                  sector (dashboard sektor), more)
       widgets/                    Komponen UI yang dipakai ulang
+      widgets/charts/             Pembungkus grafik (AppCharts: doughnut/pie/
+                                  horizontal-bar, SingleSeriesChart dll)
     test/                         Widget & unit test (lihat bagian 8)
 
 --------------------------------------------------------------------------------
@@ -102,7 +122,8 @@ Berpola lapisan sederhana (tanpa framework tambahan):
 
   - Provider didaftarkan sekali di main.dart (AuthProvider, ThemeProvider,
     DashboardProvider, MapProvider, MasterDataProvider, UserManagementProvider,
-    AuditProvider, ProfileProvider) - cakupan root (global).
+    AuditProvider, ProfileProvider, PublicDataProvider, SectorDashboardProvider)
+    - cakupan root (global).
   - Provider list CRUD (SchoolListProvider, dll.) dibuat per layar di
     resource_screens.dart lalu di-dispose saat layar ditutup.
   - Repository diakses melalui Repositories.instance (service locator), bukan
@@ -174,17 +195,20 @@ Error handling (AppException):
   - EmailVerificationScreen  Input kode 6 digit -> POST /email/verify;
                       tombol "Kirim ulang kode" + countdown 60 detik;
                       diakses dari daftar akun atau login yang ditolak.
-  - MainScaffold      AppBar (logo, tombol theme/profil/keluar) + Drawer
-                      bernavigasi dengan section (KETERTIBAN / PENDIDIKAN /
-                      KESEHATAN / SOS / NOTIFIKASI / MASTER DATA /
-                      ADMINISTRASI). Body = Dashboard. Setelah frame pertama:
-                      minta izin notifikasi (permission_handler), load
-                      notifikasi (silent) lewat NotificationProvider.load(),
-                      lalu startPolling() (polling 30 detik). dispose memanggil
-                      stopPolling() (referensi provider disimpan di field, tidak
-                      memakai context.read di dispose). SOS baru yang belum
-                      dibaca memicu alarm lokal via NotificationService
-                      (showEmergencySos) & update badge di drawer.
+  - MainScaffold      Navigasi shell baru: ModernAppBar + NavigationBar bawah
+                      (5 tab: Beranda / Peta / SOS / Notifikasi / Lainnya; di
+                      layar lebar memakai NavigationRail kiri) + Drawer dengan
+                      section "DATA & SEKTOR" (Data Publik, dashboard sektor
+                      Pendidikan/Keamanan/Kesehatan) dan "PENGELOLAAN" /
+                      "AKUN" (master data, pengguna, audit, profil, keluar).
+                      Body = tab aktif. Setelah frame pertama: minta izin
+                      notifikasi (permission_handler), load notifikasi (silent)
+                      lewat NotificationProvider.load(), lalu startPolling()
+                      (polling 30 detik). dispose memanggil stopPolling()
+                      (referensi provider disimpan di field, tidak memakai
+                      context.read di dispose). SOS baru yang belum dibaca
+                      memicu alarm lokal via NotificationService
+                      (showEmergencySos) & update badge.
   - DashboardScreen   Pull-to-refresh; welcome banner, dropdown filter
                       kecamatan, grid KPI (StatCard), kartu "Perlu Perhatian"
                       (critical/warning), top-ranking, rekap per kecamatan.
@@ -229,12 +253,49 @@ Error handling (AppException):
                       item via POST /notifications/{id}/read). Item bertipe SOS
                       membuka SosDetailScreen via data sos_alert_id (fallback
                       sos_id). Provider polling 30 detik.
+  - DataHubScreen     Hub Data Publik: banner gradien, grid KPI (StatCard) yg
+                      semuanya bisa diketuk utk membuka sektor terkait, kartu
+                      donat "Penyebaran Data per Sektor" (tiap baris legenda
+                      bisa diketuk -> daftar sektor), kartu sektor 2 kolom.
+                      Data dari GET /data (PublicDataOverview) lewat
+                      PublicDataProvider (cakupan global, di-refresh saat
+                      buka). Tombol peta di AppBar.
+  - PublicDataListScreen  Daftar per sektor (Pendidikan/Kesehatan/Ketertiban/
+                      Fasilitas Publik): kartu "Ringkasan {sektor}" berisi
+                      KPI tiles + grafik (doughnut / horizontal bar) sesuai
+                      sektor, chip pemilih entitas (Sekolah, Faskes, Polsek,
+                      Poskamling, Tipkamtikmas, Pasar, Kelurahan), cari
+                      (debounce 400ms) + pagination infinite scroll. Setiap
+                      kartu entitas bisa diketuk -> detail. Provider list
+                      (PublicSchoolListProvider dll) dibuat per layar lalu
+                      di-dispose. Letak map memetakan fasilitas -> sector
+                      "ketertiban" di endpoint /maps lama.
+  - PublicDataDetailScreen  Detail informatife per entitas: header (nama,
+                      sub-tipe • kecamatan, status aktif/tidak aktif), lalu
+                      kartu seksi per jenis entitas - Sekolah (Identitas,
+                      Statistik Siswa & Guru dgn grid KPI + gender,
+                      Sarana & Prasarana dgn progress bar, Mata Pelajaran
+                      chips), Fasilitas Kesehatan (Identitas, Kapasitas &
+                      Tenaga Medis, Deskripsi), Polsek (Kekuatan Satuan),
+                      Poskamling (Keaktifan), Tipkamtikmas (Keterangan),
+                      Pasar (Identitas), Kelurahan (Demografi penduduk).
+                      Parameter loader (fungsi) bisa disuntik utk test.
+                      Tidak memakai (item as dynamic).status (Sekolah tidak
+                      punya field status, hanya isActive/statusLabel) -
+                      lihat statusLabelFor() di public_data_entity.dart.
+  - SectorDashboardScreen  Dashboard statistik per sektor (mis. Pendidikan):
+                      KPI dari GET /sectors/{sector}/dashboard
+                      (SectorDashboardModel + SingleSeriesChart).
+                      SectorDashboardProvider cakupan global (main.dart).
+  - MoreScreen        Mengelompokkan menu akses ("Lainnya") ke semua sektor
+                      dan data publik agar nav shell tidak terlalu padat.
 
 --------------------------------------------------------------------------------
 7.  TOKEN & KEAMANAN
 --------------------------------------------------------------------------------
   - Bearer token dan data user disimpan di flutter_secure_storage
-    (AndroidOptions.encryptedSharedPreferences = true).
+    (AndroidOptions bawaan v11: RSA OAEP + AES-GCM; data lama v9 dimigrasi
+    otomatis).
   - Tema (light/dark/system) juga dipersist di storage yang sama.
   - Tidak ada secret di source (API_BASE_URL via --dart-define, default
     http://10.0.2.2:8000 untuk emulator).
@@ -256,8 +317,23 @@ Error handling (AppException):
   - test/sos_alert_test.dart       Widget test model SosAlert & provider (index,
                                       detail, kategori, respon, create) dengan
                                       repository tiruan.
-  - Jalankan: flutter test  (21 test)
-  - Analisis: flutter analyze
+  - test/chart_dashboard_test.dart Unit test parsing model dashboard per sektor
+                                      dari payload (SectorDashboardModel).
+  - test/sector_screen_layout_test.dart  Widget test SectorDashboardScreen pada
+                                      beberapa ukuran teks (1.0/1.3/1.6) + mode
+                                      gelap 320dp; memakai repo tiruan.
+  - test/data_hub_layout_test.dart Widget test DataHubScreen: render bebas
+                                      overflow pada 1.0/1.3/1.6, mode gelap
+                                      320dp, navigasi dari sektor/kartu KPI/
+                                      baris legenda ke daftar sektor.
+  - test/public_data_detail_layout_test.dart  Widget test PublicDataDetailScreen
+                                      utk 7 entitas pada skala teks 1.0/1.3/1.6
+                                      + lebar 320dp mode gelap + isi seksi
+                                      (memakai loader tiruan, tanpa jaringan).
+  - test/status_label_for_test.dart Unit test statusLabelFor(): pemetaan status
+                                      Sekolah (isActive) vs entitas lain.
+  - Jalankan: flutter test  (69 tes)
+  - Analisis: flutter analyze --no-pub
 
 --------------------------------------------------------------------------------
 9.  CARA MENJALANKAN / MENGOVERRIDE
