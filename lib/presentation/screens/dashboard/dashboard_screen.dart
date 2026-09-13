@@ -238,7 +238,7 @@ class _SosAccessCard extends StatelessWidget {
 
     return AppCard(
       icon: Icons.sos,
-      title: 'Bantuan Darurat (SOS)',
+      title: 'Bantuan Darurat',
       subtitle: 'Kirim lokasi Anda ke petugas secara instan',
       trailing: AppStatusBadge(
         label: 'Lapor',
