@@ -21,7 +21,10 @@ Versi mobile dari dashboard Command Center Kabupaten Morowali
   - DAFTAR      registrasi publik (role viewer) + verifikasi kode email 6 digit
   - SOS         tombol darurat: buat SOS (kategori Medis/Pemadam Kebakaran/
                 Polisi + lokasi), detail alur status, riwayat, dan peta live
-                posisi petugas (responder)
+                posisi petugas (responder). Status khusus "Petugas Terkendala"
+                (constrained): petugas melapor tipe kendala + alasan wajib saat
+                belum tiba, ditampilkan ke pemohon; "Selesaikan" hanya boleh
+                setelah status "Petugas Tiba"
   - NOTIFIKASI  daftar notifikasi in-app; SOS baru membunyikan alarm lokal dan
                 bisa langsung dibuka ke detail SOS
   - DATA PUBLIK hub statistik seluruh sektor (Pendidikan / Kesehatan /
@@ -242,9 +245,15 @@ Error handling (AppException):
                       /sos lalu force-refresh daftar.
   - SosDetailScreen   Tampilkan detail SOS + alur status (SosStatusTracker):
                       pending -> acknowledged -> on_the_way -> arrived ->
-                      resolved (dengan cancel). Tombol aksi per status & role:
-                      Respond/On The Way/Resolve/Cancel. Polling ringan saat
-                      SOS masih aktif agar status tetap segar.
+                      resolved (dengan cancel; + status khusus constrained =
+                      "Petugas Terkendala" yang mengunci aksi Selesai). Tombol
+                      aksi per status & role: Respond/On The Way/Tiba/Cancel +
+                      tombol "Petugas Terkendala" untuk petugas yang belum tiba
+                      (dialog pilih tipe kendala + alasan wajib diisi).
+                      "Selesaikan" hanya tampil saat status arrived; kartu
+                      kendala (tipe, alasan, waktu) tampil untuk pemohon &
+                      petugas. Polling ringan saat SOS masih aktif agar status
+                      tetap segar.
   - ResponderLiveMapScreen  Peta flutter_map: marker sender (❗) + marker
                       petugas (🚓) dari GET /sos/{id}/responder-locations;
                       polyline rute petugas->sender dari OSRM (RoutingService);
@@ -316,7 +325,15 @@ Error handling (AppException):
                                       FakeAuthRepository tanpa koneksi jaringan.
   - test/sos_alert_test.dart       Widget test model SosAlert & provider (index,
                                       detail, kategori, respon, create) dengan
-                                      repository tiruan.
+                                      repository tiruan (termasuk parsing status
+                                      constrained).
+  - test/sos_status_tracker_test.dart  Widget test SosStatusTracker: banner
+                                      "Petugas Terkendala" tampil saat ada
+                                      constraint (tipe + alasan) dan hilang saat
+                                      tidak ada kendala.
+  - test/constraint_dialog_test.dart   Widget test dialog "Petugas Terkendala":
+                                      alasan wajib diisi, submit mengembalikan
+                                      tipe+alasan, "Batal" mengembalikan null.
   - test/chart_dashboard_test.dart Unit test parsing model dashboard per sektor
                                       dari payload (SectorDashboardModel).
   - test/sector_screen_layout_test.dart  Widget test SectorDashboardScreen pada

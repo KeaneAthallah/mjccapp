@@ -54,6 +54,7 @@ void main() {
     expect(make(SosAlert.statusResponding).isOpen, isTrue);
     expect(make(SosAlert.statusOnTheWay).isOpen, isTrue);
     expect(make(SosAlert.statusArrived).isOpen, isTrue);
+    expect(make(SosAlert.statusConstrained).isOpen, isTrue);
     expect(make(SosAlert.statusResolved).isOpen, isFalse);
     expect(make(SosAlert.statusCancelled).isOpen, isFalse);
     expect(make(SosAlert.statusResolved).statusLabel, 'Selesai');
@@ -61,6 +62,7 @@ void main() {
     expect(make(SosAlert.statusAccepted).statusLabel, 'Diterima');
     expect(make(SosAlert.statusOnTheWay).statusLabel, 'Di Perjalanan');
     expect(make(SosAlert.statusArrived).statusLabel, 'Tiba di Lokasi');
+    expect(make(SosAlert.statusConstrained).statusLabel, 'Terkendala');
   });
 
   test('SosAlert categories parse into labels, icons and colors', () {
@@ -102,6 +104,56 @@ void main() {
     expect(alert.acceptedBy, 3);
     expect(alert.acceptedByUser, 'Dokter Andi');
     expect(alert.acceptedAt, isNotNull);
+  });
+
+  test('SosAlert parses responder constraint fields', () {
+    final alert = SosAlert.fromJson({
+      'id': 11,
+      'user_id': 5,
+      'latitude': -2.0,
+      'longitude': 121.0,
+      'status': 'constrained',
+      'category': 'medical',
+      'accepted_by': 3,
+      'accepted_by_user': {'id': 3, 'name': 'Dokter Andi'},
+      'constraint_type': 'cannot_reach',
+      'constraint_type_label': 'Tidak dapat menjangkau lokasi',
+      'constraint_reason': 'Jalan tertutup longsor.',
+      'constrained_by': 3,
+      'constrained_by_user': {'id': 3, 'name': 'Dokter Andi'},
+      'constrained_at': '2026-09-13T09:45:00+08:00',
+    });
+
+    expect(alert.status, SosAlert.statusConstrained);
+    expect(alert.constraintType, SosAlert.constraintCannotReach);
+    expect(alert.constraintReason, 'Jalan tertutup longsor.');
+    expect(alert.constrainedByUser, 'Dokter Andi');
+    expect(alert.constrainedAt, isNotNull);
+    expect(alert.constraintTypeDisplay, 'Tidak dapat menjangkau lokasi');
+  });
+
+  test('SosAlert maps constraint types to labels client-side', () {
+    SosAlert make(String? type) => SosAlert.fromJson({
+          'id': 1,
+          'user_id': 1,
+          'latitude': 0.0,
+          'longitude': 0.0,
+          'status': 'constrained',
+          'constraint_type': type,
+        });
+
+    expect(
+      make(SosAlert.constraintCannotReach).constraintTypeDisplay,
+      'Tidak bisa menjangkau lokasi',
+    );
+    expect(
+      make(SosAlert.constraintDelayed).constraintTypeDisplay,
+      'Terlambat / terkendala di perjalanan',
+    );
+    expect(
+      make(null).constraintTypeDisplay,
+      isNull,
+    );
   });
 
   test('SosAlert tolerates partial payloads (list view shape)', () {

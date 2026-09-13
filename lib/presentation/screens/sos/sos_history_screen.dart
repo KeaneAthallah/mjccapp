@@ -213,6 +213,7 @@ class _SosHistoryScreenState extends State<SosHistoryScreen> {
         SosAlert.statusActive => BadgeTone.red,
         SosAlert.statusAcknowledged => BadgeTone.amber,
         SosAlert.statusResponding => BadgeTone.blue,
+        SosAlert.statusConstrained => BadgeTone.amber,
         SosAlert.statusResolved => BadgeTone.green,
         SosAlert.statusCancelled => BadgeTone.gray,
         _ => BadgeTone.gray,

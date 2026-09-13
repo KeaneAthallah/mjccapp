@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../data/models/sos_alert.dart';
 
 /// Step-by-step visual tracker for an SOS lifecycle:
@@ -59,6 +60,9 @@ class SosStatusTracker extends StatelessWidget {
             colors: colors,
           ),
         ],
+        if (alert.status == SosAlert.statusConstrained &&
+            alert.constraintReason != null)
+          _constraintBanner(alert),
       ],
     );
   }
@@ -69,10 +73,67 @@ class SosStatusTracker extends StatelessWidget {
       SosAlert.statusAcknowledged => 1,
       SosAlert.statusResponding => 2,
       SosAlert.statusOnTheWay => 3,
+      SosAlert.statusConstrained => 3,
       SosAlert.statusArrived => 4,
       SosAlert.statusResolved => 5,
       _ => -1,
     };
+  }
+
+  Widget _constraintBanner(SosAlert alert) {
+    final typeLabel = alert.constraintTypeDisplay;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.amber100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.amber500),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 20,
+            color: AppColors.amber700,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Petugas Terkendala',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.amber700,
+                  ),
+                ),
+                if (typeLabel != null)
+                  Text(
+                    typeLabel,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.gray800,
+                    ),
+                  ),
+                const SizedBox(height: 2),
+                Text(
+                  alert.constraintReason!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.gray700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _stepRow({

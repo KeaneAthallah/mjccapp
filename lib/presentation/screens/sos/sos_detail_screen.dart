@@ -15,6 +15,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_status_badge.dart';
 import '../../widgets/async_view.dart';
+import '../../widgets/sos/constraint_dialog.dart';
 import '../../widgets/sos/sos_status_tracker.dart';
 import 'responder_journey_screen.dart';
 
@@ -124,6 +125,9 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
               icon: Icons.forum_outlined,
               child: Text(alert.responseMessage!),
             ),
+          if (alert.constraintReason != null &&
+              alert.constraintReason!.isNotEmpty)
+            _ConstraintCard(alert: alert),
           if (isResponder && alert.userName != null)
             AppCard(
               title: 'Informasi Responder',
@@ -198,7 +202,9 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
           ),
           if (isResponder && alert.isOpen)
             AppCard(
-              title: 'Tindakan Responder',
+              title: alert.status == SosAlert.statusConstrained
+                  ? 'Tindakan Responder • Terkendala'
+                  : 'Tindakan Responder',
               icon: Icons.handyman_outlined,
               child: Wrap(
                 spacing: AppSpacing.xs,
@@ -206,7 +212,8 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                 children: [
                   if (alert.status == SosAlert.statusAccepted ||
                       alert.status == SosAlert.statusOnTheWay ||
-                      alert.status == SosAlert.statusArrived)
+                      alert.status == SosAlert.statusArrived ||
+                      alert.status == SosAlert.statusConstrained)
                     AppButton(
                       label: 'Mulai Perjalanan',
                       icon: Icons.navigation_outlined,
@@ -231,9 +238,21 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                           : () =>
                               _setResponderAction(context, alert, 'accept'),
                     ),
+                  if (alert.status == SosAlert.statusAccepted ||
+                      alert.status == SosAlert.statusOnTheWay ||
+                      alert.status == SosAlert.statusConstrained)
+                    AppButton(
+                      label: 'Petugas Terkendala',
+                      icon: Icons.warning_amber_rounded,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: _busy
+                          ? null
+                          : () => _showConstraintDialog(alert),
+                    ),
                   if (alert.status == SosAlert.statusAcknowledged ||
                       alert.status == SosAlert.statusOnTheWay ||
-                      alert.status == SosAlert.statusActive)
+                      alert.status == SosAlert.statusActive ||
+                      alert.status == SosAlert.statusConstrained)
                     AppButton(
                       label: 'Menuju Lokasi',
                       icon: Icons.directions_outlined,
@@ -244,7 +263,8 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                               _setResponderAction(context, alert, 'ontheway'),
                     ),
                   if (alert.status == SosAlert.statusOnTheWay ||
-                      alert.status == SosAlert.statusArrived)
+                      alert.status == SosAlert.statusArrived ||
+                      alert.status == SosAlert.statusConstrained)
                     AppButton(
                       label: 'Tiba di Lokasi',
                       icon: Icons.place_outlined,
@@ -254,9 +274,7 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
                           : () =>
                               _setResponderAction(context, alert, 'arrived'),
                     ),
-                  if (alert.status == SosAlert.statusAccepted ||
-                      alert.status == SosAlert.statusOnTheWay ||
-                      alert.status == SosAlert.statusArrived)
+                  if (alert.status == SosAlert.statusArrived)
                     AppButton(
                       label: 'Selesaikan',
                       icon: Icons.check_circle_outline,
@@ -357,6 +375,33 @@ class _SosDetailScreenState extends State<SosDetailScreen> {
     }
   }
 
+  Future<void> _showConstraintDialog(SosAlert alert) async {
+    final result = await showConstraintDialog(
+      context,
+      initialType: alert.constraintType ?? SosAlert.constraintDelayed,
+      initialReason: alert.constraintReason,
+    );
+    if (result == null || !mounted) return;
+    setState(() => _busy = true);
+    final provider = context.read<SosProvider>();
+    final ok = await provider.constrainSos(
+      alert.id,
+      type: result.type,
+      reason: result.reason,
+    );
+    await _refresh();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Kendala petugas telah dilaporkan.'
+            : provider.error ?? 'Gagal melaporkan kendala.'),
+        backgroundColor: ok ? null : AppColors.red600,
+      ),
+    );
+  }
+
   Future<void> _confirmCancel() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -430,5 +475,55 @@ class _CategoryBadge extends StatelessWidget {
       color: alert.categoryColor,
       icon: alert.categoryIcon,
     );
+  }
+}
+
+/// Amber card informing the requester about a petugas constraint (cannot
+/// reach / delayed) so they know help may be late.
+class _ConstraintCard extends StatelessWidget {
+  const _ConstraintCard({required this.alert});
+
+  final SosAlert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      title: 'Kendala Petugas',
+      icon: Icons.warning_amber_rounded,
+      child: Column(
+        children: [
+          if (alert.constraintTypeDisplay != null)
+            _row('Jenis kendala', alert.constraintTypeDisplay!),
+          _row('Alasan', alert.constraintReason ?? '-'),
+          if (alert.constrainedAt != null)
+            _row('Waktu laporan', _formatDate(alert.constrainedAt)),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
   }
 }

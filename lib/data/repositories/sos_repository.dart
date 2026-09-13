@@ -88,6 +88,23 @@ class SosRepository {
     return _transition(id, 'arrived', message);
   }
 
+  /// Reports a responder constraint (petugas cannot reach / delayed). The
+  /// reason is mandatory and shown to the requester.
+  Future<SosAlert> constrain(
+    int id, {
+    required String type,
+    required String reason,
+  }) async {
+    final response = await ApiClient.instance.dio.post<Map<String, dynamic>>(
+      '/sos/$id/constraint',
+      data: {
+        'constraint_type': type,
+        'constraint_reason': reason,
+      },
+    );
+    return SosAlert.fromJson(ApiClient.envelopeData(response));
+  }
+
   Future<SosAlert> resolve(int id, {String? message}) async {
     return _transition(id, 'resolve', message);
   }

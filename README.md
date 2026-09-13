@@ -30,7 +30,9 @@ darurat (SOS) yang bekerja secara langsung (live). Navigasi bawah utama:
 - **SOS Darurat (Live)** — tombol darurat satu sentuhan:
   - Mengirim lokasi GPS (geolocator) beserta akurasi dan pesan opsional ke pusat kendali.
   - Melacak status penanganan secara **otomatis setiap 15 detik** tanpa perlu refresh.
-  - Responder/petugas menjalani alur **TERIMA SOS → MULAI PERJALANAN → SUDAH TIBA → SELESAIKAN**
+  - Responder/petugas menjalani alur **TERIMA SOS → MULAI PERJALANAN → SUDAH TIBA → SELESAIKAN**,
+    plus **TERKENDALA** (opsional, wajib alasan) saat belum bisa tiba —
+    **SELESAIKAN** baru bisa dipakai setelah petugas tiba di lokasi;
     dengan **rute jalan OSRM** (`router.project-osrm.org`), jarak & estimasi waktu,
     dan upload lokasi live petugas agar pemohon dapat melihat petugas mendekat.
   - Operator/admin dapat menerima, menuju lokasi, menyelesaikan, atau membatalkan SOS.

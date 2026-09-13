@@ -347,6 +347,28 @@ class SosProvider extends ChangeNotifier {
     }
   }
 
+  /// Reports a constraint (petugas cannot reach / delayed).
+  Future<bool> constrainSos(
+    int id, {
+    required String type,
+    required String reason,
+  }) async {
+    try {
+      final updated = await _repo.constrain(id, type: type, reason: reason);
+      _replaceItem(updated);
+      if (_myOpen?.id == updated.id) {
+        _myOpen = updated;
+        _changeCounter++;
+      }
+      return true;
+    } catch (e) {
+      _error = ErrorMessages.of(e);
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
   /// Optimistically applies a transition locally (acknowledge/respond/resolve)
   /// so the UI stays snappy; the source of truth is always the server.
   Future<void> transition(

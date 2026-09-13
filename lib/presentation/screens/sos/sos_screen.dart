@@ -581,6 +581,7 @@ class _ResponderIncidents extends StatelessWidget {
         SosAlert.statusResponding => BadgeTone.blue,
         SosAlert.statusOnTheWay => BadgeTone.blue,
         SosAlert.statusArrived => BadgeTone.teal,
+        SosAlert.statusConstrained => BadgeTone.amber,
         SosAlert.statusResolved => BadgeTone.green,
         SosAlert.statusCancelled => BadgeTone.gray,
         _ => BadgeTone.gray,

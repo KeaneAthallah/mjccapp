@@ -15,6 +15,7 @@ import '../../../data/models/sos_alert.dart';
 import '../../providers/sos_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_status_badge.dart';
+import '../../widgets/sos/constraint_dialog.dart';
 
 /// Full-screen responder journey for an accepted SOS:
 /// live GPS + real OSRM road route + distance + ETA + status buttons.
@@ -165,6 +166,37 @@ class _ResponderJourneyScreenState extends State<ResponderJourneyScreen> {
     }
   }
 
+  Future<void> _onConstrain() async {
+    final alert = _alert;
+    if (alert == null) return;
+    final result = await showConstraintDialog(
+      context,
+      initialType: alert.constraintType ?? SosAlert.constraintDelayed,
+      initialReason: alert.constraintReason,
+    );
+    if (result == null || !mounted) return;
+    final provider = context.read<SosProvider>();
+    setState(() => _busy = true);
+    final ok = await provider.constrainSos(
+      alert.id,
+      type: result.type,
+      reason: result.reason,
+    );
+    await _refreshAlert();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Kendala petugas telah dilaporkan.'
+              : provider.error ?? 'Gagal melaporkan kendala.',
+        ),
+        backgroundColor: ok ? null : AppColors.red600,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final alert = _alert!;
@@ -282,6 +314,9 @@ class _ResponderJourneyScreenState extends State<ResponderJourneyScreen> {
     final showJourneyButton =
         alert.status == SosAlert.statusAccepted &&
             (_myLocation != null);
+    final canContinue =
+        alert.status == SosAlert.statusAccepted ||
+            alert.status == SosAlert.statusConstrained;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -315,8 +350,7 @@ class _ResponderJourneyScreenState extends State<ResponderJourneyScreen> {
           if (_tracking &&
               alert.status != SosAlert.statusResolved &&
               alert.status != SosAlert.statusCancelled) ...[
-            if (showJourneyButton ||
-                alert.status == SosAlert.statusAccepted)
+            if (showJourneyButton || canContinue)
               AppButton(
                 label: 'MULAI PERJALANAN',
                 icon: Icons.play_arrow,
@@ -327,12 +361,24 @@ class _ResponderJourneyScreenState extends State<ResponderJourneyScreen> {
                     ? null
                     : () => _transition('ontheway'),
               ),
+            if (alert.status == SosAlert.statusAccepted ||
+                alert.status == SosAlert.statusOnTheWay ||
+                alert.status == SosAlert.statusConstrained)
+              AppButton(
+                label: 'TERKENDALA',
+                icon: Icons.warning_amber_rounded,
+                variant: AppButtonVariant.primary,
+                expanded: true,
+                loading: _busy,
+                onPressed: _busy ? null : _onConstrain,
+              ),
             if (alert.status == SosAlert.statusOnTheWay ||
-                alert.status == SosAlert.statusArrived)
+                alert.status == SosAlert.statusArrived ||
+                alert.status == SosAlert.statusConstrained)
               AppButton(
                 label: 'SUDAH TIBA',
                 icon: Icons.place_outlined,
-                variant: AppButtonVariant.primary,
+                variant: AppButtonVariant.secondary,
                 expanded: true,
                 loading: _busy,
                 onPressed: _busy ? null : () => _transition('arrived'),
